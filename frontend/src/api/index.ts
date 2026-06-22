@@ -1,13 +1,15 @@
 import type {
+  BuySeedResponse,
   CropType,
   HarvestResponse,
   PlantResponse,
+  SellCropResponse,
   TelegramLoginResponse,
   TelegramUser
 } from "../types";
 
 const API =
-  import.meta.env.VITE_API_BASE_URL || "https://worker.d7895h.workers.dev";
+  resolveApiBaseUrl();
 const REQUEST_TIMEOUT_MS = 10000;
 
 export async function tgLogin(
@@ -41,6 +43,28 @@ export async function harvestApi(
   });
 }
 
+export async function buySeedApi(
+  userId: number,
+  cropType: CropType,
+  quantity = 1
+): Promise<BuySeedResponse> {
+  return requestJson<BuySeedResponse>("/shop/buy-seed", {
+    method: "POST",
+    body: JSON.stringify({ userId, cropType, quantity })
+  });
+}
+
+export async function sellCropApi(
+  userId: number,
+  cropType: CropType,
+  quantity = 1
+): Promise<SellCropResponse> {
+  return requestJson<SellCropResponse>("/warehouse/sell-crop", {
+    method: "POST",
+    body: JSON.stringify({ userId, cropType, quantity })
+  });
+}
+
 
 async function requestJson<T>(
   path: string,
@@ -54,7 +78,7 @@ async function requestJson<T>(
   let res: Response;
 
   try {
-    res = await fetch(`${API}${path}`, {
+    res = await fetch(buildApiUrl(path), {
       ...init,
       signal: controller.signal,
       headers: {
@@ -94,11 +118,37 @@ function formatRequestError(path: string, error: unknown): Error {
 
   if (error instanceof Error) {
     if (error.message === "Load failed" || error.message === "Failed to fetch") {
-      return new Error(`无法连接接口：${API}${path}`);
+      return new Error(`无法连接接口：${buildApiUrl(path)}`);
     }
 
     return error;
   }
 
-  return new Error(`请求失败：${API}${path}`);
+  return new Error(`请求失败：${buildApiUrl(path)}`);
+}
+
+function buildApiUrl(path: string): string {
+  return API ? `${API}${path}` : path;
+}
+
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  if (configured) {
+    return configured;
+  }
+
+  if (isLocalHost(window.location.hostname)) {
+    return "";
+  }
+
+  return "https://worker.d7895h.workers.dev";
+}
+
+function isLocalHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0"
+  );
 }

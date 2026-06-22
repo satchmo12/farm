@@ -6,6 +6,7 @@ export interface TelegramUser {
 
 export type CropType = "wheat" | "corn" | "tomato";
 export type LandStatus = "empty" | "growing" | "ready";
+export type InventoryItemType = "seed" | "crop";
 
 export interface Land {
   status: LandStatus;
@@ -16,10 +17,21 @@ export interface Land {
   growthDurationSeconds: number;
 }
 
+export interface InventoryEntry {
+  cropType: CropType;
+  quantity: number;
+}
+
+export interface Inventory {
+  seeds: InventoryEntry[];
+  crops: InventoryEntry[];
+}
+
 export interface FarmProfile {
   user: TelegramUser;
   coin: number;
   lands: Land[];
+  inventory: Inventory;
 }
 
 export interface TelegramLoginResponse {
@@ -30,12 +42,40 @@ export interface TelegramLoginResponse {
 
 export interface PlantResponse {
   ok: true;
+  coin: number;
+  inventory: Inventory;
   land: Land;
 }
 
 export interface HarvestResponse {
   ok: true;
   coin: number;
-  gained: number;
+  inventory: Inventory;
+  harvested: {
+    cropType: CropType;
+    quantity: number;
+  };
   land: Land;
+}
+
+export interface BuySeedResponse {
+  ok: true;
+  coin: number;
+  inventory: Inventory;
+  purchased: {
+    cropType: CropType;
+    quantity: number;
+    cost: number;
+  };
+}
+
+export interface SellCropResponse {
+  ok: true;
+  coin: number;
+  inventory: Inventory;
+  sold: {
+    cropType: CropType;
+    quantity: number;
+    gained: number;
+  };
 }

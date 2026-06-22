@@ -5,13 +5,17 @@ const corsHeaders = {
 };
 
 const LAND_COUNT = 24;
+const STARTER_COIN = 120;
+const CROP_TYPES = ["wheat", "corn", "tomato"] as const;
 
-type CropType = "wheat" | "corn" | "tomato";
+type CropType = (typeof CROP_TYPES)[number];
 type LandStatus = "empty" | "growing" | "ready";
+type InventoryItemType = "seed" | "crop";
 
 interface CropConfig {
   growthDurationSeconds: number;
-  reward: number;
+  seedPrice: number;
+  sellPrice: number;
 }
 
 interface TelegramUser {
@@ -29,10 +33,21 @@ interface Land {
   growthDurationSeconds: number;
 }
 
+interface InventoryEntry {
+  cropType: CropType;
+  quantity: number;
+}
+
+interface Inventory {
+  seeds: InventoryEntry[];
+  crops: InventoryEntry[];
+}
+
 interface FarmProfile {
   user: TelegramUser;
   coin: number;
   lands: Land[];
+  inventory: Inventory;
 }
 
 interface LoginResponse {
@@ -43,13 +58,19 @@ interface LoginResponse {
 
 interface PlantResponse {
   ok: true;
+  coin: number;
+  inventory: Inventory;
   land: Land;
 }
 
 interface HarvestResponse {
   ok: true;
   coin: number;
-  gained: number;
+  inventory: Inventory;
+  harvested: {
+    cropType: CropType;
+    quantity: number;
+  };
   land: Land;
 }
 
@@ -62,6 +83,40 @@ interface PlantRequest {
 interface HarvestRequest {
   userId: number;
   position: number;
+}
+
+interface BuySeedRequest {
+  userId: number;
+  cropType: CropType;
+  quantity?: number;
+}
+
+interface BuySeedResponse {
+  ok: true;
+  coin: number;
+  inventory: Inventory;
+  purchased: {
+    cropType: CropType;
+    quantity: number;
+    cost: number;
+  };
+}
+
+interface SellCropRequest {
+  userId: number;
+  cropType: CropType;
+  quantity?: number;
+}
+
+interface SellCropResponse {
+  ok: true;
+  coin: number;
+  inventory: Inventory;
+  sold: {
+    cropType: CropType;
+    quantity: number;
+    gained: number;
+  };
 }
 
 interface UserRow {
@@ -80,18 +135,27 @@ interface LandRow {
   growth_duration_seconds: number;
 }
 
+interface InventoryRow {
+  item_type: string;
+  crop_type: string;
+  quantity: number;
+}
+
 const CROPS: Record<CropType, CropConfig> = {
   wheat: {
     growthDurationSeconds: 24,
-    reward: 12,
+    seedPrice: 6,
+    sellPrice: 12,
   },
   corn: {
     growthDurationSeconds: 36,
-    reward: 18,
+    seedPrice: 10,
+    sellPrice: 18,
   },
   tomato: {
     growthDurationSeconds: 48,
-    reward: 26,
+    seedPrice: 14,
+    sellPrice: 26,
   },
 };
 
@@ -113,6 +177,14 @@ export default {
 
     if (url.pathname === "/harvest" && req.method === "POST") {
       return handleHarvest(req, env);
+    }
+
+    if (url.pathname === "/shop/buy-seed" && req.method === "POST") {
+      return handleBuySeed(req, env);
+    }
+
+    if (url.pathname === "/warehouse/sell-crop" && req.method === "POST") {
+      return handleSellCrop(req, env);
     }
 
     return jsonResponse(
@@ -150,6 +222,8 @@ async function handleTelegramLogin(
   } else {
     await createUserFarm(env.DB, body);
   }
+
+  await ensureStarterPack(env.DB, body.id);
 
   const profile = await getFarmProfile(env.DB, body.id);
 
@@ -197,6 +271,18 @@ async function handlePlant(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "这块地已经种下作物了" }, 400);
   }
 
+  const hasSeed = await consumeInventoryQuantity(
+    env.DB,
+    body.userId,
+    "seed",
+    body.cropType,
+    1
+  );
+
+  if (!hasSeed) {
+    return jsonResponse({ error: "种子不足，请先去商店购买" }, 400);
+  }
+
   const crop = CROPS[body.cropType];
   const plantedAt = new Date().toISOString();
 
@@ -220,8 +306,12 @@ async function handlePlant(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "播种失败，请稍后再试" }, 500);
   }
 
+  const inventory = await getInventory(env.DB, body.userId);
+
   return jsonResponse<PlantResponse>({
     ok: true,
+    coin: user.coin,
+    inventory,
     land: serializeLand(updated),
   });
 }
@@ -257,26 +347,148 @@ async function handleHarvest(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "作物还没有成熟" }, 400);
   }
 
-  const gained = CROPS[currentLand.cropType].reward;
+  await addInventoryQuantity(env.DB, body.userId, "crop", currentLand.cropType, 1);
 
-  await env.DB.batch([
-    env.DB
-      .prepare(
-        "UPDATE users SET coin = coin + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-      )
-      .bind(gained, body.userId),
-    env.DB
-      .prepare(
-        "UPDATE lands SET status = 'empty', remain = 0, crop_type = NULL, planted_at = NULL, growth_duration_seconds = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND position = ?"
-      )
-      .bind(body.userId, body.position),
-  ]);
+  await env.DB
+    .prepare(
+      "UPDATE lands SET status = 'empty', remain = 0, crop_type = NULL, planted_at = NULL, growth_duration_seconds = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND position = ?"
+    )
+    .bind(body.userId, body.position)
+    .run();
+
+  const inventory = await getInventory(env.DB, body.userId);
 
   return jsonResponse<HarvestResponse>({
     ok: true,
-    coin: user.coin + gained,
-    gained,
+    coin: user.coin,
+    inventory,
+    harvested: {
+      cropType: currentLand.cropType,
+      quantity: 1,
+    },
     land: createEmptyLand(),
+  });
+}
+
+async function handleBuySeed(req: Request, env: Env): Promise<Response> {
+  const body = await parseJson<BuySeedRequest>(req);
+
+  if (!body) {
+    return jsonResponse({ error: "请求体不是合法 JSON" }, 400);
+  }
+
+  const validationError = validateUserId(body.userId);
+
+  if (validationError) {
+    return jsonResponse({ error: validationError }, 400);
+  }
+
+  if (!isCropType(body.cropType)) {
+    return jsonResponse({ error: "不支持的种子类型" }, 400);
+  }
+
+  const quantity = parseQuantity(body.quantity);
+
+  if (quantity === null) {
+    return jsonResponse({ error: "购买数量不合法" }, 400);
+  }
+
+  const user = await getUserById(env.DB, body.userId);
+
+  if (!user) {
+    return jsonResponse({ error: "用户不存在，请重新登录" }, 404);
+  }
+
+  const cost = CROPS[body.cropType].seedPrice * quantity;
+
+  if (user.coin < cost) {
+    return jsonResponse({ error: "金币不足，无法购买这些种子" }, 400);
+  }
+
+  await env.DB
+    .prepare(
+      "UPDATE users SET coin = coin - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND coin >= ?"
+    )
+    .bind(cost, body.userId, cost)
+    .run();
+
+  await addInventoryQuantity(env.DB, body.userId, "seed", body.cropType, quantity);
+
+  const inventory = await getInventory(env.DB, body.userId);
+
+  return jsonResponse<BuySeedResponse>({
+    ok: true,
+    coin: user.coin - cost,
+    inventory,
+    purchased: {
+      cropType: body.cropType,
+      quantity,
+      cost,
+    },
+  });
+}
+
+async function handleSellCrop(req: Request, env: Env): Promise<Response> {
+  const body = await parseJson<SellCropRequest>(req);
+
+  if (!body) {
+    return jsonResponse({ error: "请求体不是合法 JSON" }, 400);
+  }
+
+  const validationError = validateUserId(body.userId);
+
+  if (validationError) {
+    return jsonResponse({ error: validationError }, 400);
+  }
+
+  if (!isCropType(body.cropType)) {
+    return jsonResponse({ error: "不支持的作物类型" }, 400);
+  }
+
+  const quantity = parseQuantity(body.quantity);
+
+  if (quantity === null) {
+    return jsonResponse({ error: "出售数量不合法" }, 400);
+  }
+
+  const user = await getUserById(env.DB, body.userId);
+
+  if (!user) {
+    return jsonResponse({ error: "用户不存在，请重新登录" }, 404);
+  }
+
+  const hasCrop = await consumeInventoryQuantity(
+    env.DB,
+    body.userId,
+    "crop",
+    body.cropType,
+    quantity
+  );
+
+  if (!hasCrop) {
+    return jsonResponse({ error: "仓库里的作物数量不足" }, 400);
+  }
+
+  const gained = CROPS[body.cropType].sellPrice * quantity;
+
+  await env.DB
+    .prepare(
+      "UPDATE users SET coin = coin + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
+    .bind(gained, body.userId)
+    .run();
+
+  const inventory = await getInventory(env.DB, body.userId);
+
+  return jsonResponse<SellCropResponse>({
+    ok: true,
+    coin: user.coin + gained,
+    inventory,
+    sold: {
+      cropType: body.cropType,
+      quantity,
+      gained,
+    },
   });
 }
 
@@ -307,9 +519,19 @@ function validateTelegramUser(user: TelegramUser): string | null {
   return null;
 }
 
-function validateFarmAction(userId: number, position: number): string | null {
+function validateUserId(userId: number): string | null {
   if (!Number.isInteger(userId) || userId <= 0) {
     return "缺少合法的用户 id";
+  }
+
+  return null;
+}
+
+function validateFarmAction(userId: number, position: number): string | null {
+  const userIdError = validateUserId(userId);
+
+  if (userIdError) {
+    return userIdError;
   }
 
   if (!Number.isInteger(position) || position < 0 || position >= LAND_COUNT) {
@@ -335,9 +557,9 @@ async function createUserFarm(db: D1Database, user: TelegramUser): Promise<void>
   const statements = [
     db
       .prepare(
-        "INSERT OR IGNORE INTO users (id, first_name, username, coin, updated_at) VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)"
+        "INSERT OR IGNORE INTO users (id, first_name, username, coin, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)"
       )
-      .bind(user.id, user.first_name, user.username ?? null),
+      .bind(user.id, user.first_name, user.username ?? null, STARTER_COIN),
     ...createLandInsertStatements(db, user.id),
   ];
 
@@ -371,6 +593,31 @@ async function syncTelegramUser(
       "UPDATE users SET first_name = ?, username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     )
     .bind(user.first_name, user.username, user.id)
+    .run();
+}
+
+async function ensureStarterPack(db: D1Database, userId: number): Promise<void> {
+  const user = await getUserById(db, userId);
+
+  if (!user || user.coin > 0) {
+    return;
+  }
+
+  const [inventory, activeLandCount] = await Promise.all([
+    getInventory(db, userId),
+    countActiveLands(db, userId),
+  ]);
+  const storedCount = sumInventoryQuantity(inventory);
+
+  if (storedCount > 0 || activeLandCount > 0) {
+    return;
+  }
+
+  await db
+    .prepare(
+      "UPDATE users SET coin = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
+    .bind(STARTER_COIN, userId)
     .run();
 }
 
@@ -435,6 +682,71 @@ async function getLandByPosition(
     .first<LandRow>();
 }
 
+async function countActiveLands(
+  db: D1Database,
+  userId: number
+): Promise<number> {
+  const row = await db
+    .prepare(
+      "SELECT COUNT(*) AS total FROM lands WHERE user_id = ? AND status != 'empty'"
+    )
+    .bind(userId)
+    .first<{ total: number }>();
+
+  return typeof row?.total === "number" ? row.total : 0;
+}
+
+async function getInventory(db: D1Database, userId: number): Promise<Inventory> {
+  const result = await db
+    .prepare(
+      "SELECT item_type, crop_type, quantity FROM inventory_items WHERE user_id = ?"
+    )
+    .bind(userId)
+    .all<InventoryRow>();
+
+  return serializeInventory(result.results ?? []);
+}
+
+async function addInventoryQuantity(
+  db: D1Database,
+  userId: number,
+  itemType: InventoryItemType,
+  cropType: CropType,
+  quantity: number
+): Promise<void> {
+  if (quantity <= 0) {
+    return;
+  }
+
+  await db
+    .prepare(
+      "INSERT INTO inventory_items (user_id, item_type, crop_type, quantity, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, item_type, crop_type) DO UPDATE SET quantity = inventory_items.quantity + excluded.quantity, updated_at = CURRENT_TIMESTAMP"
+    )
+    .bind(userId, itemType, cropType, quantity)
+    .run();
+}
+
+async function consumeInventoryQuantity(
+  db: D1Database,
+  userId: number,
+  itemType: InventoryItemType,
+  cropType: CropType,
+  quantity: number
+): Promise<boolean> {
+  if (quantity <= 0) {
+    return false;
+  }
+
+  const result = await db
+    .prepare(
+      "UPDATE inventory_items SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND item_type = ? AND crop_type = ? AND quantity >= ?"
+    )
+    .bind(quantity, userId, itemType, cropType, quantity)
+    .run();
+
+  return (result.meta.changes ?? 0) > 0;
+}
+
 async function getFarmProfile(
   db: D1Database,
   userId: number
@@ -445,12 +757,15 @@ async function getFarmProfile(
     throw new Error(`未找到用户 ${userId} 的农场数据`);
   }
 
-  const landResult = await db
-    .prepare(
-      "SELECT position, status, remain, crop_type, planted_at, growth_duration_seconds FROM lands WHERE user_id = ? ORDER BY position ASC"
-    )
-    .bind(userId)
-    .all<LandRow>();
+  const [landResult, inventory] = await Promise.all([
+    db
+      .prepare(
+        "SELECT position, status, remain, crop_type, planted_at, growth_duration_seconds FROM lands WHERE user_id = ? ORDER BY position ASC"
+      )
+      .bind(userId)
+      .all<LandRow>(),
+    getInventory(db, userId),
+  ]);
   const landsByPosition = new Map<number, LandRow>();
 
   for (const land of landResult.results ?? []) {
@@ -469,7 +784,51 @@ async function getFarmProfile(
 
       return land ? serializeLand(land) : createEmptyLand();
     }),
+    inventory,
   };
+}
+
+function serializeInventory(rows: InventoryRow[]): Inventory {
+  const seedMap = new Map<CropType, number>();
+  const cropMap = new Map<CropType, number>();
+
+  for (const row of rows) {
+    if (!isCropType(row.crop_type)) {
+      continue;
+    }
+
+    const quantity =
+      typeof row.quantity === "number" && Number.isFinite(row.quantity)
+        ? Math.max(0, row.quantity)
+        : 0;
+
+    if (row.item_type === "seed") {
+      seedMap.set(row.crop_type, quantity);
+      continue;
+    }
+
+    if (row.item_type === "crop") {
+      cropMap.set(row.crop_type, quantity);
+    }
+  }
+
+  return {
+    seeds: CROP_TYPES.map((cropType) => ({
+      cropType,
+      quantity: seedMap.get(cropType) ?? 0,
+    })),
+    crops: CROP_TYPES.map((cropType) => ({
+      cropType,
+      quantity: cropMap.get(cropType) ?? 0,
+    })),
+  };
+}
+
+function sumInventoryQuantity(inventory: Inventory): number {
+  return [...inventory.seeds, ...inventory.crops].reduce(
+    (total, entry) => total + entry.quantity,
+    0
+  );
 }
 
 function serializeLand(row: LandRow): Land {
@@ -542,6 +901,22 @@ function getGrowthStage(
 
 function isCropType(value: unknown): value is CropType {
   return value === "wheat" || value === "corn" || value === "tomato";
+}
+
+function parseQuantity(value: unknown): number | null {
+  if (value === undefined) {
+    return 1;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    return null;
+  }
+
+  if (value <= 0 || value > 99) {
+    return null;
+  }
+
+  return value;
 }
 
 function jsonResponse<T>(data: T, status = 200): Response {
