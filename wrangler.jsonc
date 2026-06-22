@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "farm",
+  "compatibility_date": "2026-06-21",
+  "observability": {
+    "enabled": true
+  },
+  "build": {
+    "command": "cd frontend && npm run build"
+  },
+
+  "assets": {
+    "directory": "./frontend/dist"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
