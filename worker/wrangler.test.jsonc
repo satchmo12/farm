@@ -1,0 +1,20 @@
+/**
+ * Dedicated Wrangler config for tests.
+ * Never point this file at the production D1 database.
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "worker-test",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-21",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "farmnexa-test",
+			"migrations_dir": "./migrations"
+		}
+	]
+}

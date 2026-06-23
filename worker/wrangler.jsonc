@@ -24,8 +24,7 @@
 			"binding": "DB",
 			"database_name": "farmnexa",
 			"database_id": "3a1825e6-eb09-44fe-9f0e-568c54e6fa1c",
-			"migrations_dir": "./migrations",
-			"remote": true
+			"migrations_dir": "./migrations"
 		}
 	]
 	/**

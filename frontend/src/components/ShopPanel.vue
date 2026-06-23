@@ -9,13 +9,12 @@
       @click="openPurchase(crop.type)"
     >
       <span class="seed-card__emoji">{{ crop.stages[3] }}</span>
-      <strong>{{ crop.label }}</strong>
-      
-      <div class="seed-card__chips">
-        <span class="owned-chip owned-chip--warm">售价 {{ crop.seedPrice }} 金币</span>
-      </div>
+      <strong :title="crop.name">{{ crop.name }}</strong>
 
-     
+      <div class="seed-card__chips seed-card__chips--compact">
+        <span class="owned-chip owned-chip--warm">{{ crop.seedPrice }} 金</span>
+        <span v-if="crop.quantity > 0" class="owned-chip">x{{ crop.quantity }}</span>
+      </div>
     </button>
   </div>
 
@@ -28,7 +27,7 @@
       <div class="shop-confirm-card__hero">
         <span class="shop-confirm-card__emoji">{{ selectedCrop.stages[3] }}</span>
         <div>
-          <strong>{{ selectedCrop.label }}</strong>
+          <strong>{{ selectedCrop.name }}</strong>
           <p>{{ selectedCrop.description }}</p>
         </div>
       </div>
@@ -44,7 +43,19 @@
         </article>
         <article>
           <span>卖价</span>
-          <strong>{{ selectedCrop.sellPrice }}</strong>
+          <strong>{{ selectedCrop.fruitPrice }}</strong>
+        </article>
+        <!-- <article>
+          <span>保底产量</span>
+          <strong>{{ selectedCrop.guaranteedYield }}</strong>
+        </article> -->
+        <article>
+          <span>最高产量</span>
+          <strong>{{ selectedCrop.yield }}</strong>
+        </article>
+        <article>
+          <span>经验</span>
+          <strong>{{ selectedCrop.experience }}</strong>
         </article>
       </div>
 

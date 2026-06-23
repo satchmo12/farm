@@ -1,3 +1,11 @@
+import {
+  cropDefinitions,
+  getCropDefinition,
+  hasCropDefinition,
+  type CropDefinition,
+  type CropType,
+} from "../../shared/crops";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -6,18 +14,8 @@ const corsHeaders = {
 
 const LAND_COUNT = 24;
 const STARTER_COIN = 120;
-const CROP_TYPES = ["wheat", "corn", "tomato"] as const;
-
-type CropType = (typeof CROP_TYPES)[number];
 type LandStatus = "empty" | "growing" | "ready";
 type InventoryItemType = "seed" | "crop";
-
-interface CropConfig {
-  growthDurationSeconds: number;
-  seedPrice: number;
-  sellPrice: number;
-  harvestExperience: number;
-}
 
 interface TelegramUser {
   id: number;
@@ -175,6 +173,11 @@ interface LeaderboardResponse {
   tab: "leaderboard" | "friends";
 }
 
+interface VisitFarmResponse {
+  ok: true;
+  profile: FarmProfile;
+}
+
 interface UserRow {
   id: number;
   first_name: string;
@@ -202,27 +205,6 @@ interface InventoryRow {
   crop_type: string;
   quantity: number;
 }
-
-const CROPS: Record<CropType, CropConfig> = {
-  wheat: {
-    growthDurationSeconds: 24,
-    seedPrice: 6,
-    sellPrice: 12,
-    harvestExperience: 8,
-  },
-  corn: {
-    growthDurationSeconds: 36,
-    seedPrice: 10,
-    sellPrice: 18,
-    harvestExperience: 12,
-  },
-  tomato: {
-    growthDurationSeconds: 48,
-    seedPrice: 14,
-    sellPrice: 26,
-    harvestExperience: 18,
-  },
-};
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -258,6 +240,10 @@ export default {
 
     if (url.pathname === "/leaderboard" && req.method === "GET") {
       return handleLeaderboard(req, env);
+    }
+
+    if (url.pathname === "/farm/visit" && req.method === "GET") {
+      return handleVisitFarm(req, env);
     }
 
     return jsonResponse(
@@ -356,7 +342,7 @@ async function handlePlant(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "种子不足，请先去商店购买" }, 400);
   }
 
-  const crop = CROPS[body.cropType];
+  const crop = getCropConfig(body.cropType);
   const plantedAt = new Date().toISOString();
 
   await env.DB
@@ -421,7 +407,9 @@ async function handleHarvest(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "作物还没有成熟" }, 400);
   }
 
-  const gainedExperience = CROPS[currentLand.cropType].harvestExperience;
+  const crop = getCropConfig(currentLand.cropType);
+  const harvestedQuantity = getHarvestQuantity(crop);
+  const gainedExperience = crop.experience * harvestedQuantity;
 
   await env.DB.batch([
     env.DB
@@ -436,7 +424,13 @@ async function handleHarvest(req: Request, env: Env): Promise<Response> {
       .bind(body.userId, body.position),
   ]);
 
-  await addInventoryQuantity(env.DB, body.userId, "crop", currentLand.cropType, 1);
+  await addInventoryQuantity(
+    env.DB,
+    body.userId,
+    "crop",
+    currentLand.cropType,
+    harvestedQuantity
+  );
 
   const [inventory, refreshedUser] = await Promise.all([
     getInventory(env.DB, body.userId),
@@ -455,7 +449,7 @@ async function handleHarvest(req: Request, env: Env): Promise<Response> {
     inventory,
     harvested: {
       cropType: currentLand.cropType,
-      quantity: 1,
+      quantity: harvestedQuantity,
     },
     land: createEmptyLand(),
   });
@@ -498,15 +492,20 @@ async function handleHarvestAll(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "当前没有可收获的作物" }, 400);
   }
 
-  const harvested = readyLands.map(({ row, land }) => ({
-    position: row.position,
-    cropType: land.cropType,
-    quantity: 1,
-  }));
-  const totalExperience = harvested.reduce(
-    (total, entry) => total + CROPS[entry.cropType].harvestExperience,
-    0
-  );
+  const harvested = readyLands.map(({ row, land }) => {
+    const crop = getCropConfig(land.cropType);
+
+    return {
+      position: row.position,
+      cropType: land.cropType,
+      quantity: getHarvestQuantity(crop),
+    };
+  });
+  const totalExperience = harvested.reduce((total, entry) => {
+    const crop = getCropConfig(entry.cropType);
+
+    return total + crop.experience * entry.quantity;
+  }, 0);
   const cropCounts = new Map<CropType, number>();
 
   for (const entry of harvested) {
@@ -583,7 +582,8 @@ async function handleBuySeed(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "用户不存在，请重新登录" }, 404);
   }
 
-  const cost = CROPS[body.cropType].seedPrice * quantity;
+  const crop = getCropConfig(body.cropType);
+  const cost = crop.seedPrice * quantity;
 
   if (user.coin < cost) {
     return jsonResponse({ error: "金币不足，无法购买这些种子" }, 400);
@@ -654,7 +654,8 @@ async function handleSellCrop(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "仓库里的作物数量不足" }, 400);
   }
 
-  const gained = CROPS[body.cropType].sellPrice * quantity;
+  const crop = getCropConfig(body.cropType);
+  const gained = crop.fruitPrice * quantity;
 
   await env.DB
     .prepare(
@@ -707,6 +708,29 @@ async function handleLeaderboard(req: Request, env: Env): Promise<Response> {
   });
 
   return jsonResponse<LeaderboardResponse>(data);
+}
+
+async function handleVisitFarm(req: Request, env: Env): Promise<Response> {
+  const url = new URL(req.url);
+  const userId = Number(url.searchParams.get("userId"));
+  const validationError = validateUserId(userId);
+
+  if (validationError) {
+    return jsonResponse({ error: validationError }, 400);
+  }
+
+  const user = await getUserById(env.DB, userId);
+
+  if (!user) {
+    return jsonResponse({ error: "要拜访的玩家不存在" }, 404);
+  }
+
+  await ensureUserLands(env.DB, userId);
+
+  return jsonResponse<VisitFarmResponse>({
+    ok: true,
+    profile: await getFarmProfile(env.DB, userId),
+  });
 }
 
 async function parseJson<T>(req: Request): Promise<T | null> {
@@ -1257,6 +1281,16 @@ function escapeSqlLike(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
+function getCropConfig(cropType: CropType): CropDefinition {
+  const crop = getCropDefinition(cropType);
+
+  if (!crop) {
+    throw new Error(`未找到作物配置: ${cropType}`);
+  }
+
+  return crop;
+}
+
 function serializeInventory(rows: InventoryRow[]): Inventory {
   const seedMap = new Map<CropType, number>();
   const cropMap = new Map<CropType, number>();
@@ -1282,13 +1316,13 @@ function serializeInventory(rows: InventoryRow[]): Inventory {
   }
 
   return {
-    seeds: CROP_TYPES.map((cropType) => ({
-      cropType,
-      quantity: seedMap.get(cropType) ?? 0,
+    seeds: cropDefinitions.map((crop) => ({
+      cropType: crop.type,
+      quantity: seedMap.get(crop.type) ?? 0,
     })),
-    crops: CROP_TYPES.map((cropType) => ({
-      cropType,
-      quantity: cropMap.get(cropType) ?? 0,
+    crops: cropDefinitions.map((crop) => ({
+      cropType: crop.type,
+      quantity: cropMap.get(crop.type) ?? 0,
     })),
   };
 }
@@ -1368,8 +1402,17 @@ function getGrowthStage(
   return Math.min(4, Math.max(1, stage)) as 1 | 2 | 3 | 4;
 }
 
-function isCropType(value: unknown): value is CropType {
-  return value === "wheat" || value === "corn" || value === "tomato";
+const isCropType = hasCropDefinition;
+
+function getHarvestQuantity(crop: CropDefinition): number {
+  if (crop.guaranteedYield >= crop.yield) {
+    return crop.guaranteedYield;
+  }
+
+  return (
+    crop.guaranteedYield +
+    Math.floor(Math.random() * (crop.yield - crop.guaranteedYield + 1))
+  );
 }
 
 function parseQuantity(value: unknown): number | null {

@@ -20,13 +20,6 @@
 
       <div class="leaderboard-panel__header">
         <div>
-          <p>
-            {{
-              activeTab === "leaderboard"
-                ? "排行榜支持分页和搜索，列表区域单独滚动。"
-                : "好友功能还会继续扩展，现在先支持搜索玩家。"
-            }}
-          </p>
           <strong class="social-result-count">共 {{ total }} 位玩家</strong>
         </div>
         <button class="panel-ghost-button" type="button" :disabled="loading" @click="$emit('refresh')">
@@ -53,7 +46,7 @@
           :key="`${player.user.id}-${player.rank}`"
           class="leaderboard-card"
         >
-          <div class="leaderboard-card__rank">#{{ player.rank }}</div>
+          <div class="leaderboard-card__rank">{{ player.rank }}</div>
 
           <div
             :class="['leaderboard-avatar', { 'leaderboard-avatar--image': !!player.user.photo_url }]"
@@ -70,7 +63,26 @@
           <div class="leaderboard-card__stats">
             <span>Lv.{{ player.progression.level }}</span>
             <span>{{ player.coin }} 金币</span>
-            <span>{{ player.progression.experience }} EXP</span>
+            <!-- <span>{{ player.progression.experience }} EXP</span> -->
+          </div>
+
+          <div class="leaderboard-card__actions">
+            <button
+              class="panel-ghost-button leaderboard-card__button"
+              type="button"
+              :disabled="loading || player.isCurrentUser"
+              @click="$emit('visit', player)"
+            >
+              {{ player.isCurrentUser ? "自己" : "拜访" }}
+            </button>
+            <button
+              class="panel-ghost-button leaderboard-card__button"
+              type="button"
+              :disabled="loading || player.isCurrentUser"
+              @click="$emit('add-friend', player)"
+            >
+              加好友
+            </button>
           </div>
         </article>
       </div>
@@ -158,6 +170,8 @@ defineEmits<{
   (event: "update:tab", tab: SocialTab): void;
   (event: "update:query", query: string): void;
   (event: "change-page", page: number): void;
+  (event: "visit", player: LeaderboardPlayer): void;
+  (event: "add-friend", player: LeaderboardPlayer): void;
 }>();
 
 function getInitial(name: string) {

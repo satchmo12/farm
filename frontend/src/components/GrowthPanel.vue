@@ -4,7 +4,7 @@
       <span class="growth-panel__emoji">{{ cropIcon }}</span>
       <div>
         <strong>{{ cropLabel }}</strong>
-        <p>第 {{ land.stage }} 阶段，距离成熟还有 {{ remainText }}</p>
+        <p>{{ currentStageLabel }}，距离成熟还有 {{ remainText }}</p>
       </div>
     </div>
 
@@ -15,7 +15,7 @@
         :class="['growth-stage', { 'growth-stage--active': stageIndex + 1 <= land.stage }]"
       >
         <span class="growth-stage__icon">{{ stageIcon }}</span>
-        <strong>阶段 {{ stageIndex + 1 }}</strong>
+        <strong>{{ stageLabels[stageIndex] }}</strong>
       </article>
     </div>
 
@@ -35,14 +35,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { Land } from "../types";
 
-defineProps<{
+const props = defineProps<{
   land: Land;
   cropIcon: string;
   cropLabel: string;
   remainText: string;
   growthPercent: number;
   stageIcons: string[];
+  stageLabels: string[];
 }>();
+
+const currentStageLabel = computed(() => {
+  if (props.land.stage <= 0) {
+    return props.stageLabels[0] ?? "播种";
+  }
+
+  return props.stageLabels[props.land.stage - 1] ?? `阶段 ${props.land.stage}`;
+});
 </script>

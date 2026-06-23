@@ -1,3 +1,14 @@
+import type {
+  CropDefinition,
+  CropType,
+} from "../../../shared/crops";
+
+export type {
+  CropStageIcons,
+  CropStageLabels,
+  CropType,
+} from "../../../shared/crops";
+
 export interface TelegramUser {
   id: number;
   username?: string;
@@ -5,13 +16,10 @@ export interface TelegramUser {
   photo_url?: string;
 }
 
-export type CropType = "wheat" | "corn" | "tomato";
 export type LandStatus = "empty" | "growing" | "ready";
 export type InventoryItemType = "seed" | "crop";
 export type WarehouseTab = "seed" | "crop";
 export type SocialTab = "leaderboard" | "friends";
-
-export type CropStageIcons = [string, string, string, string];
 
 export interface Land {
   status: LandStatus;
@@ -32,15 +40,7 @@ export interface Inventory {
   crops: InventoryEntry[];
 }
 
-export interface CropCatalogItem {
-  type: CropType;
-  label: string;
-  description: string;
-  totalSeconds: number;
-  seedPrice: number;
-  sellPrice: number;
-  stages: CropStageIcons;
-}
+export interface CropCatalogItem extends CropDefinition {}
 
 export interface CropCatalogInventoryItem extends CropCatalogItem {
   quantity: number;
@@ -72,6 +72,11 @@ export interface FarmProfile {
 export interface TelegramLoginResponse {
   ok: true;
   created: boolean;
+  profile: FarmProfile;
+}
+
+export interface VisitFarmResponse {
+  ok: true;
   profile: FarmProfile;
 }
 

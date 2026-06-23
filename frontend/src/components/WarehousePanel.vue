@@ -20,18 +20,15 @@
     </div>
 
     <div v-if="warehouseTab === 'seed' && warehouseSeeds.length > 0" class="warehouse-grid">
-      <article v-for="crop in warehouseSeeds" :key="`seed-${crop.type}`" class="warehouse-card">
-        <div class="warehouse-card__top">
-          <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
-          <div>
-            <strong>{{ crop.label }}</strong>
-            <p>可直接出现在播种面板</p>
-          </div>
-        </div>
-
-        <div class="warehouse-card__meta">
-          <span class="warehouse-count">{{ crop.quantity }}</span>
-          <span>库存种子</span>
+      <article
+        v-for="crop in warehouseSeeds"
+        :key="`seed-${crop.type}`"
+        class="warehouse-card warehouse-card--compact"
+      >
+        <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
+        <strong :title="crop.name">{{ crop.name }}</strong>
+        <div class="warehouse-card__meta warehouse-card__meta--compact">
+          <span class="warehouse-count">x{{ crop.quantity }}</span>
         </div>
       </article>
     </div>
@@ -40,27 +37,22 @@
       <article
         v-for="crop in warehouseCrops"
         :key="`crop-${crop.type}`"
-        class="warehouse-card warehouse-card--crop"
+        class="warehouse-card warehouse-card--crop warehouse-card--compact"
       >
-        <div class="warehouse-card__top">
-          <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
-          <div>
-            <strong>{{ crop.label }}</strong>
-          </div>
-        </div>
-
-        <div class="warehouse-card__meta">
-          <span class="warehouse-count">{{ crop.quantity }}</span>
-          <span>仓库存货</span>
+        <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
+        <strong :title="crop.name">{{ crop.name }}</strong>
+        <div class="warehouse-card__meta warehouse-card__meta--compact">
+          <span class="warehouse-count">x{{ crop.quantity }}</span>
+          <span>+{{ crop.fruitPrice }}/份</span>
         </div>
 
         <button
-          class="warehouse-action"
+          class="warehouse-action warehouse-action--compact"
           type="button"
           :disabled="panelBusy || crop.quantity <= 0"
           @click="$emit('sell', crop.type)"
         >
-          {{ crop.quantity > 0 ? `出售 1 份 · +${crop.sellPrice} 金币` : "暂无可出售作物" }}
+          出售
         </button>
       </article>
     </div>

@@ -7,6 +7,7 @@ import type {
   SocialTab,
   PlantResponse,
   SellCropResponse,
+  VisitFarmResponse,
   TelegramLoginResponse,
   TelegramUser
 } from "../types";
@@ -111,6 +112,16 @@ export async function getLeaderboardApi(
   const query = searchParams.toString();
 
   return requestJson<SocialListResponse>(`/leaderboard${query ? `?${query}` : ""}`, {
+    method: "GET"
+  });
+}
+
+export async function visitFarmApi(userId: number): Promise<VisitFarmResponse> {
+  const searchParams = new URLSearchParams({
+    userId: String(userId)
+  });
+
+  return requestJson<VisitFarmResponse>(`/farm/visit?${searchParams.toString()}`, {
     method: "GET"
   });
 }

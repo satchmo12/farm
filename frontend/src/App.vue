@@ -14,16 +14,19 @@
 
       <div class="game-layout">
         <FarmScene
-          :lands="lands"
+          :lands="displayedLands"
           :ready-land-count="readyLandCount"
           :growing-land-count="growingLandCount"
           :error-message="errorMessage"
           :panel-busy="panelBusy"
+          :visit-mode="visitMode"
+          :visit-farm-name="visitFarmName"
           :get-crop-class-name="getCropClassName"
           :get-land-icon="getLandIcon"
           :get-bursts-for-land="getBurstsForLand"
           @land-click="handleLandClick"
           @harvest-all="harvestAllReadyLands"
+          @return-home="returnToOwnFarm"
         />
 
         <SideRail
@@ -92,6 +95,7 @@
         :remain-text="formatRemain(selectedGrowthLand.remain)"
         :growth-percent="getGrowthPercent(selectedGrowthLand)"
         :stage-icons="getGrowthStageIcons(selectedGrowthLand.cropType)"
+        :stage-labels="getGrowthStageLabels(selectedGrowthLand.cropType)"
       />
 
       <SocialPanel
@@ -108,6 +112,8 @@
         @update:tab="handleSocialTabChange"
         @update:query="handleSocialQueryChange"
         @change-page="handleSocialPageChange"
+        @visit="visitPlayerFarm"
+        @add-friend="handleAddFriend"
       />
     </GameModal>
   </div>
@@ -123,6 +129,7 @@ import {
   plantApi,
   sellCropApi,
   tgLogin,
+  visitFarmApi,
 } from "./api";
 import FarmScene from "./components/FarmScene.vue";
 import GameHud from "./components/GameHud.vue";
@@ -149,11 +156,13 @@ import {
   getCropClassName,
   getCropLabel,
   getGrowthStageIcons,
+  getGrowthStageLabels,
   getLandIcon,
 } from "./game/crops";
 import type {
   CropCatalogInventoryItem,
   CropType,
+  FarmProfile,
   FloatingBurst,
   Inventory,
   Land,
@@ -193,6 +202,7 @@ const socialQuery = ref("");
 const socialPage = ref(1);
 const socialTotal = ref(0);
 const socialTotalPages = ref(1);
+const visitProfile = ref<FarmProfile | null>(null);
 
 const totalSeedCount = computed(() =>
   inventory.value.seeds.reduce((total, entry) => total + entry.quantity, 0)
@@ -216,11 +226,14 @@ const experienceProgressPercent = computed(() =>
 const experienceRemaining = computed(() =>
   Math.max(0, progression.value.requiredExperience - progression.value.progressInLevel)
 );
+const displayedLands = computed(() => visitProfile.value?.lands ?? lands);
+const visitMode = computed(() => visitProfile.value !== null);
+const visitFarmName = computed(() => visitProfile.value?.user.first_name ?? "");
 const readyLandCount = computed(
-  () => lands.filter((land) => land.status === "ready").length
+  () => displayedLands.value.filter((land) => land.status === "ready").length
 );
 const growingLandCount = computed(
-  () => lands.filter((land) => land.status === "growing").length
+  () => displayedLands.value.filter((land) => land.status === "growing").length
 );
 const shopCatalog = computed<CropCatalogInventoryItem[]>(() =>
   cropCatalog.map((crop) => ({
@@ -247,7 +260,7 @@ const selectedGrowthLand = computed(() => {
     return null;
   }
 
-  return lands[selectedLandIndex.value] ?? null;
+  return displayedLands.value[selectedLandIndex.value] ?? null;
 });
 const panelKicker = computed(() => {
   switch (activePanel.value) {
@@ -401,12 +414,28 @@ function handleTick() {
       syncLandProgress(land);
     }
   }
+
+  for (const land of visitProfile.value?.lands ?? []) {
+    if (land.status !== "empty") {
+      syncLandProgress(land);
+    }
+  }
 }
 
 async function handleLandClick(index: number) {
-  const land = lands[index];
+  const land = displayedLands.value[index];
 
-  if (!user.value || panelBusy.value) {
+  if (!user.value || panelBusy.value || !land) {
+    return;
+  }
+
+  if (visitMode.value) {
+    if (land.status === "empty") {
+      return;
+    }
+
+    selectedLandIndex.value = index;
+    activePanel.value = "growth";
     return;
   }
 
@@ -492,6 +521,43 @@ function handleSocialPageChange(nextPage: number) {
 
   socialPage.value = nextPage;
   void refreshLeaderboard();
+}
+
+async function visitPlayerFarm(player: LeaderboardPlayer) {
+  if (panelBusy.value || player.isCurrentUser) {
+    return;
+  }
+
+  panelBusy.value = true;
+  errorMessage.value = "";
+
+  try {
+    const response = await visitFarmApi(player.user.id);
+    visitProfile.value = response.profile;
+    forceCloseActivePanel();
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "拜访农场失败，请稍后再试。";
+  } finally {
+    panelBusy.value = false;
+  }
+}
+
+function handleAddFriend(player: LeaderboardPlayer) {
+  if (player.isCurrentUser) {
+    return;
+  }
+
+  errorMessage.value = `加好友功能稍后开放，先支持拜访 ${player.user.first_name} 的农场。`;
+}
+
+function returnToOwnFarm() {
+  if (panelBusy.value) {
+    return;
+  }
+
+  visitProfile.value = null;
+  selectedLandIndex.value = null;
 }
 
 async function buySeed(cropType: CropType, quantity = 1) {

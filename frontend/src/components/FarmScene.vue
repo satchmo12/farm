@@ -1,11 +1,20 @@
 <template>
   <section class="scene-stage">
     <div class="scene-hint">
-      <!-- <strong>{{ readyLandCount }} 块可收获</strong>
-      <span>{{ growingLandCount }} 块正在成长</span> -->
-     
+      <template v-if="visitMode">
+        <strong>{{ visitFarmName }} 的农场</strong>
+        <span>当前是拜访模式，只能查看，不能操作。</span>
+        <button
+          class="panel-ghost-button scene-hint__button"
+          type="button"
+          @click="$emit('return-home')"
+        >
+          返回我的农场
+        </button>
+      </template>
+
       <button
-        v-if="readyLandCount > 0"
+        v-else-if="readyLandCount > 0"
         class="harvest-all-button"
         type="button"
         :disabled="panelBusy"
@@ -74,6 +83,8 @@ const props = defineProps<{
   growingLandCount: number;
   errorMessage: string;
   panelBusy: boolean;
+  visitMode: boolean;
+  visitFarmName: string;
   getCropClassName: (land: Land) => string;
   getLandIcon: (land: Land) => string;
   getBurstsForLand: (index: number) => FloatingBurst[];
@@ -82,6 +93,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: "land-click", index: number): void;
   (event: "harvest-all"): void;
+  (event: "return-home"): void;
 }>();
 
 const sceneViewportRef = ref<HTMLElement | null>(null);

@@ -9,20 +9,10 @@
       @click="$emit('plant', crop.type)"
     >
       <span class="seed-card__emoji">{{ crop.stages[3] }}</span>
-      <strong>{{ crop.label }}</strong>
-      <span>{{ crop.description }}</span>
-      <div class="seed-stages">
-        <span
-          v-for="(stageIcon, stageIndex) in crop.stages"
-          :key="stageIcon + stageIndex"
-          class="seed-stage"
-        >
-          {{ stageIcon }}
-        </span>
-      </div>
-      <div class="seed-card__meta">
-        <span>{{ crop.totalSeconds }}s 成熟</span>
-        <span>库存 {{ crop.quantity }}</span>
+      <strong :title="crop.name">{{ crop.name }}</strong>
+      <div class="seed-card__chips seed-card__chips--compact">
+        <span class="owned-chip">x{{ crop.quantity }}</span>
+        <span class="owned-chip owned-chip--warm">{{ crop.growthDurationSeconds }}s</span>
       </div>
     </button>
   </div>
