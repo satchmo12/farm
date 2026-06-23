@@ -11,7 +11,7 @@ const schemaStatements = [
   "DROP TABLE IF EXISTS inventory_items",
   "DROP TABLE IF EXISTS lands",
   "DROP TABLE IF EXISTS users",
-  "CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, username TEXT, coin INTEGER NOT NULL DEFAULT 0 CHECK (coin >= 0), experience INTEGER NOT NULL DEFAULT 0 CHECK (experience >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP) STRICT",
+  "CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, username TEXT, avatar_url TEXT, coin INTEGER NOT NULL DEFAULT 0 CHECK (coin >= 0), experience INTEGER NOT NULL DEFAULT 0 CHECK (experience >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP) STRICT",
   "CREATE TABLE lands (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, position INTEGER NOT NULL CHECK (position >= 0 AND position < 24), status TEXT NOT NULL DEFAULT 'empty' CHECK (status IN ('empty', 'growing', 'ready')), remain INTEGER NOT NULL DEFAULT 0 CHECK (remain >= 0), crop_type TEXT, planted_at TEXT, growth_duration_seconds INTEGER NOT NULL DEFAULT 0 CHECK (growth_duration_seconds >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, position)) STRICT",
   "CREATE INDEX idx_lands_user_id_position ON lands(user_id, position)",
   "CREATE TABLE inventory_items (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, item_type TEXT NOT NULL CHECK (item_type IN ('seed', 'crop')), crop_type TEXT NOT NULL CHECK (crop_type IN ('wheat', 'corn', 'tomato')), quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, item_type, crop_type)) STRICT",
@@ -61,7 +61,7 @@ describe("farm gameplay", () => {
           crops: Array<{ cropType: string; quantity: number }>;
         };
         lands: Array<{ status: string; remain: number; stage: number }>;
-        user: { id: number; first_name: string; username?: string };
+        user: { id: number; first_name: string; username?: string; photo_url?: string };
       };
     };
 
@@ -303,14 +303,154 @@ describe("farm gameplay", () => {
         ?.quantity
     ).toBe(0);
   }, 30_000);
+
+  it("returns leaderboard players ordered by experience and coin", async () => {
+    await createUserFarm(5005, "Nova", "nova", "https://img.example/nova.png");
+    await createUserFarm(5006, "Milo", "milo", "https://img.example/milo.png");
+    await createUserFarm(5007, "Luna", "luna", "https://img.example/luna.png");
+
+    await env.DB
+      .prepare("UPDATE users SET experience = ?, coin = ? WHERE id = ?")
+      .bind(120, 140, 5005)
+      .run();
+    await env.DB
+      .prepare("UPDATE users SET experience = ?, coin = ? WHERE id = ?")
+      .bind(220, 90, 5006)
+      .run();
+    await env.DB
+      .prepare("UPDATE users SET experience = ?, coin = ? WHERE id = ?")
+      .bind(120, 180, 5007)
+      .run();
+
+    const request = new IncomingRequest(
+      "https://example.com/leaderboard?userId=5005",
+      {
+        method: "GET",
+      }
+    );
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(request, env, ctx);
+
+    await waitOnExecutionContext(ctx);
+
+    expect(response.status).toBe(200);
+
+    const data = (await response.json()) as {
+      ok: boolean;
+      players: Array<{
+        rank: number;
+        coin: number;
+        isCurrentUser: boolean;
+        user: {
+          id: number;
+          first_name: string;
+          photo_url?: string;
+        };
+        progression: {
+          level: number;
+          experience: number;
+        };
+      }>;
+      currentUser: {
+        rank: number;
+        user: { id: number; first_name: string };
+      } | null;
+      total: number;
+      totalPages: number;
+      page: number;
+    };
+
+    expect(data.ok).toBe(true);
+    expect(data.total).toBe(2);
+    expect(data.totalPages).toBe(1);
+    expect(data.page).toBe(1);
+    expect(data.players.slice(0, 2).map((player) => player.user.id)).toEqual([
+      5006,
+      5007,
+    ]);
+    expect(data.players[0]).toMatchObject({
+      rank: 1,
+      coin: 90,
+      user: {
+        id: 5006,
+        first_name: "Milo",
+        photo_url: "https://img.example/milo.png",
+      },
+      progression: { level: 3, experience: 220 },
+    });
+    expect(data.currentUser).toMatchObject({
+      rank: 3,
+      user: { id: 5005, first_name: "Nova" },
+    });
+  }, 30_000);
+
+  it("supports leaderboard search and pagination", async () => {
+    await createUserFarm(6001, "Alpha", "alpha");
+    await createUserFarm(6002, "Bravo", "bravo");
+    await createUserFarm(6003, "Charlie", "charlie");
+    await createUserFarm(6004, "Delta", "delta");
+
+    const pagedRequest = new IncomingRequest(
+      "https://example.com/leaderboard?userId=6001&page=2&pageSize=2",
+      {
+        method: "GET",
+      }
+    );
+    const pagedCtx = createExecutionContext();
+    const pagedResponse = await worker.fetch(pagedRequest, env, pagedCtx);
+
+    await waitOnExecutionContext(pagedCtx);
+
+    expect(pagedResponse.status).toBe(200);
+
+    const pagedData = (await pagedResponse.json()) as {
+      players: Array<{ user: { id: number } }>;
+      page: number;
+      totalPages: number;
+      total: number;
+    };
+
+    expect(pagedData.page).toBe(2);
+    expect(pagedData.totalPages).toBe(2);
+    expect(pagedData.total).toBe(3);
+    expect(pagedData.players).toHaveLength(1);
+
+    const searchRequest = new IncomingRequest(
+      "https://example.com/leaderboard?userId=6001&query=char",
+      {
+        method: "GET",
+      }
+    );
+    const searchCtx = createExecutionContext();
+    const searchResponse = await worker.fetch(searchRequest, env, searchCtx);
+
+    await waitOnExecutionContext(searchCtx);
+
+    expect(searchResponse.status).toBe(200);
+
+    const searchData = (await searchResponse.json()) as {
+      players: Array<{ user: { id: number; first_name: string } }>;
+      total: number;
+    };
+
+    expect(searchData.total).toBe(1);
+    expect(searchData.players).toEqual([
+      { user: { id: 6003, first_name: "Charlie" } },
+    ]);
+  }, 30_000);
 });
 
-async function createUserFarm(userId: number): Promise<void> {
+async function createUserFarm(
+  userId: number,
+  firstName = "Alice",
+  username = "alice",
+  avatarUrl: string | null = null
+): Promise<void> {
   await env.DB
     .prepare(
-      "INSERT INTO users (id, first_name, username, coin, experience) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO users (id, first_name, username, avatar_url, coin, experience) VALUES (?, ?, ?, ?, ?, ?)"
     )
-    .bind(userId, "Alice", "alice", 120, 0)
+    .bind(userId, firstName, username, avatarUrl, 120, 0)
     .run();
 
   for (let position = 0; position < 24; position++) {

@@ -1,457 +1,177 @@
 <template>
   <div class="farm-app">
     <div class="game-shell">
-      <div v-if="user" class="hud-overlay">
-        <button class="player-medallion" type="button" :disabled="panelBusy" @click="openProfilePanel">
-          <span class="player-medallion__avatar">{{ user.first_name.slice(0, 1) }}</span>
-          <div class="player-medallion__meta">
-            <strong>{{ user.first_name }}</strong>
-            <p>Lv.{{ playerLevel }}</p>
-            <div class="player-progress">
-              <div class="player-progress__track">
-                <span class="player-progress__fill" :style="{ width: `${experienceProgressPercent}%` }"></span>
-              </div>
-              <span class="player-progress__text">
-                EXP {{ progression.progressInLevel }}/{{ progression.requiredExperience }}
-              </span>
-            </div>
-          </div>
-        </button>
-      </div>
-
-      <header class="hud-bar">
-        <div class="resource-ribbon">
-          <article class="resource-pill resource-pill--coin">
-            <span class="resource-pill__icon">🪙</span>
-            <div>
-              <p>金币</p>
-              <strong :class="['coin-total', { 'coin-total--bump': coinBump }]">
-                {{ coin }}
-              </strong>
-            </div>
-          </article>
-
-          <!-- <article class="resource-pill">
-            <span class="resource-pill__icon">🌱</span>
-            <div>
-              <p>种子</p>
-              <strong>{{ totalSeedCount }}</strong>
-            </div>
-          </article> -->
-
-         
-        </div>
-      </header>
+      <GameHud
+        :user="user"
+        :coin="coin"
+        :coin-bump="coinBump"
+        :panel-busy="panelBusy"
+        :player-level="playerLevel"
+        :experience-progress-percent="experienceProgressPercent"
+        :progression="progression"
+        @open-profile="openProfilePanel"
+      />
 
       <div class="game-layout">
+        <FarmScene
+          :lands="lands"
+          :ready-land-count="readyLandCount"
+          :growing-land-count="growingLandCount"
+          :error-message="errorMessage"
+          :panel-busy="panelBusy"
+          :get-crop-class-name="getCropClassName"
+          :get-land-icon="getLandIcon"
+          :get-bursts-for-land="getBurstsForLand"
+          @land-click="handleLandClick"
+          @harvest-all="harvestAllReadyLands"
+        />
 
-
-        <section class="scene-stage">
-          <div class="scene-hint">
-            <strong>{{ readyLandCount }} 块可收获</strong>
-            <span>{{ growingLandCount }} 块正在成长</span>
-            <button
-              v-if="readyLandCount > 0"
-              class="harvest-all-button"
-              type="button"
-              :disabled="panelBusy"
-              @click="harvestAllReadyLands"
-            >
-              一键收获 {{ readyLandCount }} 块
-            </button>
-          </div>
-
-          <p v-if="errorMessage" class="error-banner error-banner--floating">{{ errorMessage }}</p>
-
-          <div
-            ref="sceneViewportRef"
-            :class="[
-              'scene-viewport',
-              {
-                'scene-viewport--can-pan': canPanScene,
-                'scene-viewport--dragging': isSceneDragging,
-              },
-            ]"
-            @pointerdown="beginSceneDrag"
-            @pointermove="moveSceneDrag"
-            @pointerup="endSceneDrag"
-            @pointercancel="endSceneDrag"
-          >
-            <div
-              ref="sceneCanvasRef"
-              :class="['scene-stage__canvas', { 'scene-stage__canvas--dragging': isSceneDragging }]"
-              :style="sceneCanvasStyle"
-            >
-              <div class="farm-board">
-                <div class="farm-grid">
-                  <button v-for="(land, index) in lands" :key="index"
-                    :class="['land-tile', `land-tile--${land.status}`, getCropClassName(land)]" type="button"
-                    @click="handleLandClick(index)">
-                    <span class="plot-id">#{{ String(index + 1).padStart(2, "0") }}</span>
-                    <div class="crop-visual">
-                      <span class="crop-icon">{{ getIcon(land) }}</span>
-                      <span v-if="land.status === 'ready'" class="crop-badge">可收获</span>
-                    </div>
-
-                    <span v-for="burst in getBurstsForLand(index)" :key="burst.id" class="coin-burst">
-                      {{ burst.label }}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p v-if="canPanScene" class="scene-pan-note">左右拖动画面查看完整农场</p>
-        </section>
+        <SideRail
+          :panel-busy="panelBusy"
+          @open-shop="openShopPanel"
+          @open-warehouse="openWarehousePanel"
+          @open-crops="openCropWarehousePanel"
+          @open-social="openSocialPanel"
+        />
       </div>
-
-      <aside class="side-rail">
-        <button class="rail-button" type="button" :disabled="panelBusy" @click="openShopPanel">
-          <span class="rail-button__icon">🛒</span>
-          <span>商店</span>
-        </button>
-        <button class="rail-button" type="button" :disabled="panelBusy" @click="openWarehousePanel">
-          <span class="rail-button__icon">📦</span>
-          <span>仓库</span>
-        </button>
-        <button class="rail-button" type="button" :disabled="panelBusy" @click="openCropWarehousePanel">
-          <span class="rail-button__icon">🥕</span>
-          <span>作物</span>
-        </button>
-      </aside>
     </div>
 
-    <div
+    <GameModal
       v-if="activePanel"
-      :class="[
-        'seed-panel-backdrop',
-        {
-          'seed-panel-backdrop--centered':
-            activePanel === 'growth' ||
-            activePanel === 'profile' ||
-            activePanel === 'shop' ||
-            activePanel === 'warehouse',
-        }
-      ]"
-      @click.self="closeActivePanel"
+      :centered="isCompactPanel"
+      :compact="isCompactPanel"
+      :kicker="panelKicker"
+      :title="panelTitle"
+      @close="closeActivePanel"
     >
-      <section
-        :class="[
-          'seed-panel',
-          {
-            'seed-panel--compact':
-              activePanel === 'growth' ||
-              activePanel === 'profile' ||
-              activePanel === 'shop' ||
-              activePanel === 'warehouse',
-          }
-        ]"
-      >
-        <div class="seed-panel__header">
-          <div v-if="activePanel === 'plant'">
-            <p class="seed-kicker">准备播种</p>
-            <h2>第 {{ (selectedLandIndex ?? 0) + 1 }} 号地块</h2>
-          </div>
+      <PlantPanel
+        v-if="activePanel === 'plant'"
+        :owned-seeds="ownedSeeds"
+        :panel-busy="panelBusy"
+        @plant="plantSelectedCrop"
+        @open-shop="openShopFromPlant"
+      />
 
-          <div v-else-if="activePanel === 'shop'">
-            <p class="seed-kicker">商店</p>
-          </div>
+      <ShopPanel
+        v-else-if="activePanel === 'shop'"
+        :shop-catalog="shopCatalog"
+        :coin="coin"
+        :panel-busy="panelBusy"
+        @buy="buySeed"
+      />
 
-          <div v-else-if="activePanel === 'warehouse'">
-            <p class="seed-kicker">仓库</p>
-          </div>
+      <WarehousePanel
+        v-else-if="activePanel === 'warehouse'"
+        :warehouse-tab="warehouseTab"
+        :total-seed-count="totalSeedCount"
+        :total-crop-count="totalCropCount"
+        :warehouse-seeds="warehouseSeeds"
+        :warehouse-crops="warehouseCrops"
+        :panel-busy="panelBusy"
+        @update:warehouse-tab="warehouseTab = $event"
+        @sell="sellStoredCrop"
+      />
 
-          <div v-else-if="activePanel === 'profile'">
-            <p class="seed-kicker">个人中心</p>
-            <h2>{{ user?.first_name ?? "农场主" }}</h2>
-          </div>
+      <ProfilePanel
+        v-else-if="activePanel === 'profile'"
+        :user="user"
+        :player-level="playerLevel"
+        :progression="progression"
+        :experience-progress-percent="experienceProgressPercent"
+        :experience-remaining="experienceRemaining"
+        :coin="coin"
+        :total-seed-count="totalSeedCount"
+        :total-crop-count="totalCropCount"
+      />
 
-          <div v-else>
-            <p class="seed-kicker">成长状态</p>
-            <h2>{{ selectedGrowthLand ? getCropLabel(selectedGrowthLand.cropType) : "作物成长中" }}</h2>
-          </div>
+      <GrowthPanel
+        v-else-if="selectedGrowthLand"
+        :land="selectedGrowthLand"
+        :crop-icon="getLandIcon(selectedGrowthLand)"
+        :crop-label="getCropLabel(selectedGrowthLand.cropType)"
+        :remain-text="formatRemain(selectedGrowthLand.remain)"
+        :growth-percent="getGrowthPercent(selectedGrowthLand)"
+        :stage-icons="getGrowthStageIcons(selectedGrowthLand.cropType)"
+      />
 
-          <button class="close-button" type="button" aria-label="关闭弹窗" @click="closeActivePanel">
-            ×
-          </button>
-        </div>
-
-        <template v-if="activePanel === 'plant'">
-          <div v-if="ownedSeeds.length > 0" class="seed-grid">
-            <button v-for="crop in ownedSeeds" :key="crop.type" class="seed-card seed-card--plant" type="button"
-              :disabled="panelBusy" @click="plantSelectedCrop(crop.type)">
-              <span class="seed-card__emoji">{{ crop.stages[3] }}</span>
-              <strong>{{ crop.label }}</strong>
-              <span>{{ crop.description }}</span>
-              <div class="seed-stages">
-                <span v-for="(stageIcon, stageIndex) in crop.stages" :key="stageIcon + stageIndex" class="seed-stage">
-                  {{ stageIcon }}
-                </span>
-              </div>
-              <div class="seed-card__meta">
-                <span>{{ crop.totalSeconds }}s 成熟</span>
-                <span>库存 {{ crop.quantity }}</span>
-              </div>
-            </button>
-          </div>
-
-          <div v-else class="panel-empty">
-            <strong>仓库里还没有种子</strong>
-            <p>现在种植面板只展示你真正拥有的种子，先去商店买几颗再回来播种。</p>
-            <button class="panel-ghost-button" type="button" :disabled="panelBusy" @click="openShopFromPlant">
-              去商店购买
-            </button>
-          </div>
-        </template>
-
-        <div v-else-if="activePanel === 'shop'" class="seed-grid">
-          <article v-for="crop in cropCatalog" :key="crop.type" class="seed-card seed-card--shop">
-            <span class="seed-card__emoji">{{ crop.stages[3] }}</span>
-            <strong>{{ crop.label }}</strong>
-            <span>{{ crop.description }}</span>
-
-            <div class="seed-card__chips">
-              <span class="owned-chip">拥有 {{ getInventoryQuantity("seed", crop.type) }}</span>
-              <span class="owned-chip owned-chip--warm">
-                售价 {{ crop.seedPrice }} 金币
-              </span>
-            </div>
-
-            <div class="seed-stages">
-              <span v-for="(stageIcon, stageIndex) in crop.stages" :key="stageIcon + stageIndex" class="seed-stage">
-                {{ stageIcon }}
-              </span>
-            </div>
-
-            <div class="seed-card__meta">
-              <span>{{ crop.totalSeconds }}s 成熟</span>
-              <span>卖出 {{ crop.sellPrice }} 金币</span>
-            </div>
-
-            <button class="seed-buy-button" type="button" :disabled="panelBusy || coin < crop.seedPrice"
-              @click="buySeed(crop.type)">
-              {{ coin >= crop.seedPrice ? "购买 1 颗" : "金币不足" }}
-            </button>
-          </article>
-        </div>
-
-        <div v-else-if="activePanel === 'warehouse'" class="warehouse-shell">
-          <div class="warehouse-tabs">
-            <button :class="['warehouse-tab', { 'warehouse-tab--active': warehouseTab === 'seed' }]" type="button"
-              :disabled="panelBusy" @click="warehouseTab = 'seed'">
-              种子 {{ totalSeedCount }}
-            </button>
-            <button :class="['warehouse-tab', { 'warehouse-tab--active': warehouseTab === 'crop' }]" type="button"
-              :disabled="panelBusy" @click="warehouseTab = 'crop'">
-              作物 {{ totalCropCount }}
-            </button>
-          </div>
-
-          <div v-if="warehouseTab === 'seed' && warehouseSeeds.length > 0" class="warehouse-grid">
-            <article v-for="crop in warehouseSeeds" :key="`seed-${crop.type}`" class="warehouse-card">
-              <div class="warehouse-card__top">
-                <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
-                <div>
-                  <strong>{{ crop.label }}</strong>
-                  <p>可直接出现在播种面板</p>
-                </div>
-              </div>
-
-              <div class="warehouse-card__meta">
-                <span class="warehouse-count">
-                  {{ getInventoryQuantity("seed", crop.type) }}
-                </span>
-                <span>库存种子</span>
-              </div>
-            </article>
-          </div>
-
-          <div v-else-if="warehouseTab === 'crop' && warehouseCrops.length > 0" class="warehouse-grid">
-            <article v-for="crop in warehouseCrops" :key="`crop-${crop.type}`"
-              class="warehouse-card warehouse-card--crop">
-              <div class="warehouse-card__top">
-                <span class="warehouse-emoji">{{ crop.stages[3] }}</span>
-                <div>
-                  <strong>{{ crop.label }}</strong>
-                </div>
-              </div>
-
-              <div class="warehouse-card__meta">
-                <span class="warehouse-count">
-                  {{ getInventoryQuantity("crop", crop.type) }}
-                </span>
-                <span>仓库存货</span>
-              </div>
-
-              <button class="warehouse-action" type="button"
-                :disabled="panelBusy || getInventoryQuantity('crop', crop.type) <= 0"
-                @click="sellStoredCrop(crop.type)">
-                {{
-                  getInventoryQuantity("crop", crop.type) > 0
-                    ? `出售 1 份 · +${crop.sellPrice} 金币`
-                    : "暂无可出售作物"
-                }}
-              </button>
-            </article>
-          </div>
-
-          <div v-else class="panel-empty panel-empty--warehouse">
-            <strong>{{ warehouseTab === "seed" ? "仓库里还没有种子" : "仓库里还没有作物" }}</strong>
-            <p>
-              {{
-                warehouseTab === "seed"
-                  ? "先去商店买种子，买到的种子才会出现在这里。"
-                  : "成熟后收获的作物会先进入这里，再决定什么时候卖掉。"
-              }}
-            </p>
-          </div>
-        </div>
-
-        <div v-else-if="activePanel === 'profile'" class="profile-panel">
-          <div class="profile-panel__hero">
-            <span class="profile-panel__avatar">{{ user?.first_name?.slice(0, 1) ?? "F" }}</span>
-            <div>
-              <strong>Lv.{{ playerLevel }} 农场主</strong>
-              <p>@{{ user?.username || `user_${user?.id ?? "farm"}` }}</p>
-            </div>
-          </div>
-
-          <div class="profile-progress-card">
-            <div class="profile-progress-card__top">
-              <span>经验进度</span>
-              <strong>{{ progression.progressInLevel }}/{{ progression.requiredExperience }}</strong>
-            </div>
-            <div class="profile-progress-card__track">
-              <span class="profile-progress-card__fill" :style="{ width: `${experienceProgressPercent}%` }"></span>
-            </div>
-            <p>总经验 {{ progression.experience }}，距离 Lv.{{ playerLevel + 1 }} 还差 {{ experienceRemaining }}</p>
-          </div>
-
-          <div class="profile-stats">
-            <article class="profile-stat">
-              <span>金币</span>
-              <strong>{{ coin }}</strong>
-            </article>
-            <article class="profile-stat">
-              <span>种子库存</span>
-              <strong>{{ totalSeedCount }}</strong>
-            </article>
-            <article class="profile-stat">
-              <span>作物库存</span>
-              <strong>{{ totalCropCount }}</strong>
-            </article>
-          </div>
-        </div>
-
-        <div v-else-if="selectedGrowthLand" class="growth-panel">
-          <div class="growth-panel__hero">
-            <span class="growth-panel__emoji">{{ getIcon(selectedGrowthLand) }}</span>
-            <div>
-              <strong>{{ getCropLabel(selectedGrowthLand.cropType) }}</strong>
-              <p>第 {{ selectedGrowthLand.stage }} 阶段，距离成熟还有 {{ formatRemain(selectedGrowthLand.remain) }}</p>
-            </div>
-          </div>
-
-          <div class="growth-panel__meter">
-            <article
-              v-for="(stageIcon, stageIndex) in getGrowthStageIcons(selectedGrowthLand.cropType)"
-              :key="stageIcon + stageIndex"
-              :class="['growth-stage', { 'growth-stage--active': stageIndex + 1 <= selectedGrowthLand.stage }]"
-            >
-              <span class="growth-stage__icon">{{ stageIcon }}</span>
-              <strong>阶段 {{ stageIndex + 1 }}</strong>
-            </article>
-          </div>
-
-          <div class="growth-panel__facts">
-            <article class="growth-fact">
-              <span>成长进度</span>
-              <strong>{{ getGrowthPercent(selectedGrowthLand) }}%</strong>
-            </article>
-            <article class="growth-fact">
-              <span>成熟时间</span>
-              <strong>{{ selectedGrowthLand.growthDurationSeconds }}s</strong>
-            </article>
-          </div>
-
-          <p class="growth-panel__hint">作物成熟后，再点击地块就会直接收获进仓库。</p>
-        </div>
-      </section>
-    </div>
+      <SocialPanel
+        v-else-if="activePanel === 'social'"
+        :active-tab="socialTab"
+        :query="socialQuery"
+        :players="leaderboardPlayers"
+        :current-user="socialCurrentUser"
+        :loading="leaderboardLoading"
+        :page="socialPage"
+        :total-pages="socialTotalPages"
+        :total="socialTotal"
+        @refresh="refreshLeaderboard"
+        @update:tab="handleSocialTabChange"
+        @update:query="handleSocialQueryChange"
+        @change-page="handleSocialPageChange"
+      />
+    </GameModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import {
   buySeedApi,
+  getLeaderboardApi,
   harvestAllApi,
   harvestApi,
   plantApi,
   sellCropApi,
   tgLogin,
 } from "./api";
+import FarmScene from "./components/FarmScene.vue";
+import GameHud from "./components/GameHud.vue";
+import GameModal from "./components/GameModal.vue";
+import GrowthPanel from "./components/GrowthPanel.vue";
+import PlantPanel from "./components/PlantPanel.vue";
+import ProfilePanel from "./components/ProfilePanel.vue";
+import ShopPanel from "./components/ShopPanel.vue";
+import SideRail from "./components/SideRail.vue";
+import SocialPanel from "./components/SocialPanel.vue";
+import WarehousePanel from "./components/WarehousePanel.vue";
+import {
+  createEmptyFarm,
+  createEmptyInventory,
+  createEmptyProgression,
+  formatRemain,
+  getGrowthPercent,
+  LAND_COUNT,
+  normalizeInventory,
+  normalizeLand,
+} from "./game/farm";
+import {
+  cropCatalog,
+  getCropClassName,
+  getCropLabel,
+  getGrowthStageIcons,
+  getLandIcon,
+} from "./game/crops";
 import type {
+  CropCatalogInventoryItem,
   CropType,
+  FloatingBurst,
   Inventory,
-  InventoryEntry,
   Land,
+  LeaderboardPlayer,
   Progression,
+  SocialTab,
   TelegramUser,
+  WarehouseTab,
 } from "./types";
 import { getTelegramUser, getTelegramUserErrorReason } from "./utils/telegram";
 
-const LAND_COUNT = 24;
-
-type PanelType = "plant" | "shop" | "warehouse" | "growth" | "profile";
-type WarehouseTab = "seed" | "crop";
-
-interface CropCatalogItem {
-  type: CropType;
-  label: string;
-  description: string;
-  totalSeconds: number;
-  seedPrice: number;
-  sellPrice: number;
-  stages: [string, string, string, string];
-}
-
-const cropCatalog: CropCatalogItem[] = [
-  {
-    type: "wheat",
-    label: "金穗小麦",
-    description: "成熟快，适合快速滚动种植节奏。",
-    totalSeconds: 24,
-    seedPrice: 6,
-    sellPrice: 12,
-    stages: ["·", "🌱", "🌿", "🌾"],
-  },
-  {
-    type: "corn",
-    label: "甜芯玉米",
-    description: "中等周期，适合稳定屯货出售。",
-    totalSeconds: 36,
-    seedPrice: 10,
-    sellPrice: 18,
-    stages: ["·", "🌱", "🌿", "🌽"],
-  },
-  {
-    type: "tomato",
-    label: "红果番茄",
-    description: "成熟慢一点，但卖价最高。",
-    totalSeconds: 48,
-    seedPrice: 14,
-    sellPrice: 26,
-    stages: ["·", "🌱", "🪴", "🍅"],
-  },
-];
-
-interface FloatingBurst {
-  id: number;
-  label: string;
-  landIndex: number;
-}
+type PanelType =
+  | "plant"
+  | "shop"
+  | "warehouse"
+  | "growth"
+  | "profile"
+  | "social";
 
 const user = ref<TelegramUser | null>(null);
 const errorMessage = ref("");
@@ -465,17 +185,14 @@ const lands = reactive<Land[]>(createEmptyFarm());
 const inventory = ref<Inventory>(createEmptyInventory());
 const progression = ref<Progression>(createEmptyProgression());
 const harvestBursts = ref<FloatingBurst[]>([]);
-const sceneViewportRef = ref<HTMLElement | null>(null);
-const sceneCanvasRef = ref<HTMLElement | null>(null);
-const sceneOffsetX = ref(0);
-const canPanScene = ref(false);
-const sceneMinOffsetX = ref(0);
-const sceneMaxOffsetX = ref(0);
-const draggingPointerId = ref<number | null>(null);
-const dragStartX = ref(0);
-const dragOriginX = ref(0);
-const dragMoved = ref(false);
-const suppressLandClickUntil = ref(0);
+const leaderboardPlayers = ref<LeaderboardPlayer[]>([]);
+const leaderboardLoading = ref(false);
+const socialCurrentUser = ref<LeaderboardPlayer | null>(null);
+const socialTab = ref<SocialTab>("leaderboard");
+const socialQuery = ref("");
+const socialPage = ref(1);
+const socialTotal = ref(0);
+const socialTotalPages = ref(1);
 
 const totalSeedCount = computed(() =>
   inventory.value.seeds.reduce((total, entry) => total + entry.quantity, 0)
@@ -489,7 +206,10 @@ const experienceProgressPercent = computed(() =>
     0,
     Math.min(
       100,
-      Math.round((progression.value.progressInLevel / progression.value.requiredExperience) * 100)
+      Math.round(
+        (progression.value.progressInLevel / progression.value.requiredExperience) *
+          100
+      )
     )
   )
 );
@@ -502,19 +222,25 @@ const readyLandCount = computed(
 const growingLandCount = computed(
   () => lands.filter((land) => land.status === "growing").length
 );
+const shopCatalog = computed<CropCatalogInventoryItem[]>(() =>
+  cropCatalog.map((crop) => ({
+    ...crop,
+    quantity: getInventoryQuantity("seed", crop.type),
+  }))
+);
 const ownedSeeds = computed(() =>
+  shopCatalog.value.filter((crop) => crop.quantity > 0)
+);
+const warehouseSeeds = computed(() =>
+  shopCatalog.value.filter((crop) => crop.quantity > 0)
+);
+const warehouseCrops = computed<CropCatalogInventoryItem[]>(() =>
   cropCatalog
     .map((crop) => ({
       ...crop,
-      quantity: getInventoryQuantity("seed", crop.type),
+      quantity: getInventoryQuantity("crop", crop.type),
     }))
     .filter((crop) => crop.quantity > 0)
-);
-const warehouseSeeds = computed(() =>
-  cropCatalog.filter((crop) => getInventoryQuantity("seed", crop.type) > 0)
-);
-const warehouseCrops = computed(() =>
-  cropCatalog.filter((crop) => getInventoryQuantity("crop", crop.type) > 0)
 );
 const selectedGrowthLand = computed(() => {
   if (activePanel.value !== "growth" || selectedLandIndex.value === null) {
@@ -523,68 +249,58 @@ const selectedGrowthLand = computed(() => {
 
   return lands[selectedLandIndex.value] ?? null;
 });
-const isSceneDragging = computed(() => draggingPointerId.value !== null);
-const sceneCanvasStyle = computed(() => ({
-  transform: `translateX(${sceneOffsetX.value}px)`,
-}));
+const panelKicker = computed(() => {
+  switch (activePanel.value) {
+    case "plant":
+      return "准备播种";
+    case "shop":
+      return "商店";
+    case "warehouse":
+      return "仓库";
+    case "profile":
+      return "个人中心";
+    case "social":
+      return "好友大厅";
+    case "growth":
+      return "成长状态";
+    default:
+      return "";
+  }
+});
+const panelTitle = computed(() => {
+  switch (activePanel.value) {
+    case "plant":
+      return `第 ${(selectedLandIndex.value ?? 0) + 1} 号地块`;
+    case "shop":
+      return "种子商店";
+    case "warehouse":
+      return "农场仓库";
+    case "profile":
+      return user.value?.first_name ?? "农场主";
+    case "social":
+      return "好友";
+    case "growth":
+      return selectedGrowthLand.value
+        ? getCropLabel(selectedGrowthLand.value.cropType)
+        : "作物成长中";
+    default:
+      return "";
+  }
+});
+const isCompactPanel = computed(
+  () =>
+    activePanel.value === "growth" ||
+    activePanel.value === "profile" ||
+    activePanel.value === "shop" ||
+    activePanel.value === "warehouse" ||
+    activePanel.value === "social"
+);
 
 let progressTimer: number | null = null;
 let coinAnimationTimer: number | null = null;
 let burstId = 0;
+let socialSearchTimer: number | null = null;
 const burstTimers = new Set<number>();
-
-function createEmptyLand(): Land {
-  return {
-    status: "empty",
-    remain: 0,
-    cropType: null,
-    stage: 0,
-    plantedAt: null,
-    growthDurationSeconds: 0,
-  };
-}
-
-function createEmptyFarm(): Land[] {
-  return Array.from({ length: LAND_COUNT }, () => createEmptyLand());
-}
-
-function createEmptyInventory(): Inventory {
-  return {
-    seeds: createInventoryEntries(),
-    crops: createInventoryEntries(),
-  };
-}
-
-function createEmptyProgression(): Progression {
-  return {
-    experience: 0,
-    level: 1,
-    currentLevelExperience: 0,
-    nextLevelExperience: 60,
-    progressInLevel: 0,
-    requiredExperience: 60,
-  };
-}
-
-function createInventoryEntries(source?: InventoryEntry[] | null): InventoryEntry[] {
-  const quantities = new Map<CropType, number>();
-
-  for (const entry of source ?? []) {
-    quantities.set(entry.cropType, Math.max(0, entry.quantity || 0));
-  }
-
-  return cropCatalog.map((crop) => ({
-    cropType: crop.type,
-    quantity: quantities.get(crop.type) ?? 0,
-  }));
-}
-
-function normalizeInventory(next?: Partial<Inventory> | null): Inventory {
-  return {
-    seeds: createInventoryEntries(next?.seeds),
-    crops: createInventoryEntries(next?.crops),
-  };
-}
 
 function replaceInventory(next?: Partial<Inventory> | null) {
   inventory.value = normalizeInventory(next);
@@ -603,62 +319,6 @@ function getInventoryQuantity(itemType: WarehouseTab, cropType: CropType) {
   return bucket.find((entry) => entry.cropType === cropType)?.quantity ?? 0;
 }
 
-function normalizeLand(land?: Partial<Land> | null): Land {
-  const cropType = land?.cropType ?? null;
-  const plantedAt = land?.plantedAt ?? null;
-  const growthDurationSeconds =
-    typeof land?.growthDurationSeconds === "number"
-      ? Math.max(0, land.growthDurationSeconds)
-      : 0;
-
-  if (!cropType || !plantedAt || growthDurationSeconds <= 0) {
-    return createEmptyLand();
-  }
-
-  const plantedAtMs = Date.parse(plantedAt);
-
-  if (Number.isNaN(plantedAtMs)) {
-    return createEmptyLand();
-  }
-
-  const elapsedSeconds = Math.max(
-    0,
-    Math.floor((Date.now() - plantedAtMs) / 1000)
-  );
-  const remain = Math.max(0, growthDurationSeconds - elapsedSeconds);
-  const status = remain === 0 ? "ready" : "growing";
-  const stage = getGrowthStage(elapsedSeconds, growthDurationSeconds, status);
-
-  return {
-    status,
-    remain,
-    cropType,
-    stage,
-    plantedAt,
-    growthDurationSeconds,
-  };
-}
-
-function getGrowthStage(
-  elapsedSeconds: number,
-  totalSeconds: number,
-  status: Land["status"]
-): Land["stage"] {
-  if (status === "empty") {
-    return 0;
-  }
-
-  if (status === "ready") {
-    return 4;
-  }
-
-  const safeTotal = Math.max(1, totalSeconds);
-  const progress = Math.min(0.999, elapsedSeconds / safeTotal);
-  const stage = Math.floor(progress * 4) + 1;
-
-  return Math.min(4, Math.max(1, stage)) as Land["stage"];
-}
-
 function syncLandProgress(land: Land) {
   Object.assign(land, normalizeLand(land));
 }
@@ -674,97 +334,6 @@ function replaceFarm(nextLands: Land[]) {
 function setPanelScrollLock(locked: boolean) {
   document.documentElement.classList.toggle("panel-open", locked);
   document.body.classList.toggle("panel-open", locked);
-}
-
-function clampSceneOffset(nextOffset: number) {
-  return Math.min(
-    sceneMaxOffsetX.value,
-    Math.max(sceneMinOffsetX.value, nextOffset)
-  );
-}
-
-function getCenteredSceneOffset(viewportWidth: number, canvasWidth: number) {
-  if (canvasWidth <= viewportWidth) {
-    return 0;
-  }
-
-  return Math.round((viewportWidth - canvasWidth) / 2);
-}
-
-function syncScenePanBounds(recenter = false) {
-  const viewportWidth = sceneViewportRef.value?.clientWidth ?? 0;
-  const canvasWidth = sceneCanvasRef.value?.scrollWidth ?? 0;
-
-  if (!viewportWidth || !canvasWidth) {
-    return;
-  }
-
-  const shouldPan = canvasWidth > viewportWidth + 2;
-
-  canPanScene.value = shouldPan;
-  sceneMinOffsetX.value = shouldPan ? viewportWidth - canvasWidth : 0;
-  sceneMaxOffsetX.value = 0;
-
-  if (!shouldPan) {
-    sceneOffsetX.value = 0;
-    return;
-  }
-
-  if (recenter) {
-    sceneOffsetX.value = clampSceneOffset(
-      getCenteredSceneOffset(viewportWidth, canvasWidth)
-    );
-    return;
-  }
-
-  sceneOffsetX.value = clampSceneOffset(sceneOffsetX.value);
-}
-
-function handleSceneResize() {
-  syncScenePanBounds(true);
-}
-
-function beginSceneDrag(event: PointerEvent) {
-  if (!canPanScene.value || activePanel.value !== null) {
-    return;
-  }
-
-  draggingPointerId.value = event.pointerId;
-  dragStartX.value = event.clientX;
-  dragOriginX.value = sceneOffsetX.value;
-  dragMoved.value = false;
-
-  sceneViewportRef.value?.setPointerCapture(event.pointerId);
-}
-
-function moveSceneDrag(event: PointerEvent) {
-  if (draggingPointerId.value !== event.pointerId) {
-    return;
-  }
-
-  const deltaX = event.clientX - dragStartX.value;
-
-  if (Math.abs(deltaX) > 6) {
-    dragMoved.value = true;
-  }
-
-  sceneOffsetX.value = clampSceneOffset(dragOriginX.value + deltaX);
-}
-
-function endSceneDrag(event: PointerEvent) {
-  if (draggingPointerId.value !== event.pointerId) {
-    return;
-  }
-
-  if (dragMoved.value) {
-    suppressLandClickUntil.value = Date.now() + 180;
-  }
-
-  if (sceneViewportRef.value?.hasPointerCapture(event.pointerId)) {
-    sceneViewportRef.value.releasePointerCapture(event.pointerId);
-  }
-  draggingPointerId.value = null;
-  dragMoved.value = false;
 }
 
 function openShopPanel() {
@@ -790,6 +359,15 @@ function openProfilePanel() {
   activePanel.value = "profile";
 }
 
+async function openSocialPanel() {
+  selectedLandIndex.value = null;
+  activePanel.value = "social";
+  socialTab.value = "leaderboard";
+  socialQuery.value = "";
+  socialPage.value = 1;
+  await refreshLeaderboard();
+}
+
 function openShopFromPlant() {
   if (panelBusy.value) {
     return;
@@ -801,6 +379,11 @@ function openShopFromPlant() {
 function closeActivePanel() {
   if (panelBusy.value) {
     return;
+  }
+
+  if (socialSearchTimer !== null) {
+    window.clearTimeout(socialSearchTimer);
+    socialSearchTimer = null;
   }
 
   activePanel.value = null;
@@ -823,11 +406,7 @@ function handleTick() {
 async function handleLandClick(index: number) {
   const land = lands[index];
 
-  if (
-    !user.value ||
-    panelBusy.value ||
-    Date.now() < suppressLandClickUntil.value
-  ) {
+  if (!user.value || panelBusy.value) {
     return;
   }
 
@@ -848,7 +427,74 @@ async function handleLandClick(index: number) {
   }
 }
 
-async function buySeed(cropType: CropType) {
+async function refreshLeaderboard() {
+  if (!user.value) {
+    return;
+  }
+
+  leaderboardLoading.value = true;
+
+  try {
+    const response = await getLeaderboardApi({
+      userId: user.value.id,
+      page: socialPage.value,
+      pageSize: 5,
+      query: socialQuery.value,
+      tab: socialTab.value,
+    });
+    leaderboardPlayers.value = response.players;
+    socialCurrentUser.value = response.currentUser;
+    socialTotal.value = response.total;
+    socialTotalPages.value = response.totalPages;
+    socialPage.value = response.page;
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "排行榜加载失败，请稍后再试。";
+  } finally {
+    leaderboardLoading.value = false;
+  }
+}
+
+function handleSocialTabChange(nextTab: SocialTab) {
+  if (socialTab.value === nextTab) {
+    return;
+  }
+
+  if (socialSearchTimer !== null) {
+    window.clearTimeout(socialSearchTimer);
+    socialSearchTimer = null;
+  }
+
+  socialTab.value = nextTab;
+  socialQuery.value = "";
+  socialPage.value = 1;
+  void refreshLeaderboard();
+}
+
+function handleSocialQueryChange(nextQuery: string) {
+  socialQuery.value = nextQuery;
+  socialPage.value = 1;
+
+  if (socialSearchTimer !== null) {
+    window.clearTimeout(socialSearchTimer);
+  }
+
+  socialSearchTimer = window.setTimeout(() => {
+    socialSearchTimer = null;
+    void refreshLeaderboard();
+  }, 260);
+}
+
+function handleSocialPageChange(nextPage: number) {
+  if (nextPage < 1 || nextPage === socialPage.value) {
+    return;
+  }
+
+  socialPage.value = nextPage;
+  void refreshLeaderboard();
+}
+
+async function buySeed(cropType: CropType, quantity = 1) {
   if (!user.value) {
     return;
   }
@@ -857,7 +503,7 @@ async function buySeed(cropType: CropType) {
   errorMessage.value = "";
 
   try {
-    const response = await buySeedApi(user.value.id, cropType, 1);
+    const response = await buySeedApi(user.value.id, cropType, quantity);
 
     coin.value = response.coin;
     replaceProgression(response.progression);
@@ -880,7 +526,11 @@ async function plantSelectedCrop(cropType: CropType) {
   errorMessage.value = "";
 
   try {
-    const response = await plantApi(user.value.id, selectedLandIndex.value, cropType);
+    const response = await plantApi(
+      user.value.id,
+      selectedLandIndex.value,
+      cropType
+    );
 
     lands.splice(selectedLandIndex.value, 1, normalizeLand(response.land));
     coin.value = response.coin;
@@ -911,7 +561,9 @@ async function harvestLand(index: number) {
     replaceInventory(response.inventory);
     launchHarvestBurst(
       index,
-      `+${response.harvested.quantity} ${getCropLabel(response.harvested.cropType)} · +${response.gainedExperience} EXP`
+      `+${response.harvested.quantity} ${getCropLabel(
+        response.harvested.cropType
+      )} · +${response.gainedExperience} EXP`
     );
   } catch (error) {
     errorMessage.value =
@@ -979,6 +631,10 @@ function bumpCoinCounter() {
     window.clearTimeout(coinAnimationTimer);
   }
 
+  if (socialSearchTimer !== null) {
+    window.clearTimeout(socialSearchTimer);
+  }
+
   window.requestAnimationFrame(() => {
     coinBump.value = true;
     coinAnimationTimer = window.setTimeout(() => {
@@ -1009,68 +665,8 @@ function getBurstsForLand(index: number) {
   return harvestBursts.value.filter((burst) => burst.landIndex === index);
 }
 
-function getCropMeta(cropType: CropType | null) {
-  return cropCatalog.find((crop) => crop.type === cropType) ?? null;
-}
-
-function getCropLabel(cropType: CropType | null) {
-  return getCropMeta(cropType)?.label ?? "空地";
-}
-
-function getCropClassName(land: Land) {
-  if (!land.cropType) {
-    return "land-tile--plain";
-  }
-
-  return `land-tile--${land.cropType}`;
-}
-
-function getIcon(land: Land) {
-  if (land.status === "empty") {
-    return "＋";
-  }
-
-  const crop = getCropMeta(land.cropType);
-
-  if (!crop) {
-    return "＋";
-  }
-
-  const iconIndex = Math.max(0, land.stage - 1);
-
-  return crop.stages[iconIndex] ?? crop.stages[0];
-}
-
-function getGrowthPercent(land: Land) {
-  if (land.status === "empty" || land.growthDurationSeconds <= 0) {
-    return 0;
-  }
-
-  const completed = Math.max(0, land.growthDurationSeconds - land.remain);
-  const progress = (completed / land.growthDurationSeconds) * 100;
-
-  return Math.max(0, Math.min(100, Math.round(progress)));
-}
-
-function getGrowthStageIcons(cropType: CropType | null) {
-  return (getCropMeta(cropType)?.stages ?? ["🌰", "🌱", "🌿", "✨"]).map(
-    (icon, index) => (index === 0 && icon === "·" ? "🌰" : icon)
-  );
-}
-
-function formatRemain(remain: number) {
-  const minutes = Math.floor(remain / 60);
-  const seconds = remain % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 onMounted(async () => {
   progressTimer = window.setInterval(handleTick, 1000);
-  window.addEventListener("resize", handleSceneResize);
-
-  await nextTick();
-  syncScenePanBounds(true);
 
   const tgUser = getTelegramUser();
 
@@ -1101,7 +697,6 @@ watch(activePanel, (value) => {
 
 onUnmounted(() => {
   setPanelScrollLock(false);
-  window.removeEventListener("resize", handleSceneResize);
 
   if (progressTimer !== null) {
     window.clearInterval(progressTimer);

@@ -2,11 +2,16 @@ export interface TelegramUser {
   id: number;
   username?: string;
   first_name: string;
+  photo_url?: string;
 }
 
 export type CropType = "wheat" | "corn" | "tomato";
 export type LandStatus = "empty" | "growing" | "ready";
 export type InventoryItemType = "seed" | "crop";
+export type WarehouseTab = "seed" | "crop";
+export type SocialTab = "leaderboard" | "friends";
+
+export type CropStageIcons = [string, string, string, string];
 
 export interface Land {
   status: LandStatus;
@@ -25,6 +30,26 @@ export interface InventoryEntry {
 export interface Inventory {
   seeds: InventoryEntry[];
   crops: InventoryEntry[];
+}
+
+export interface CropCatalogItem {
+  type: CropType;
+  label: string;
+  description: string;
+  totalSeconds: number;
+  seedPrice: number;
+  sellPrice: number;
+  stages: CropStageIcons;
+}
+
+export interface CropCatalogInventoryItem extends CropCatalogItem {
+  quantity: number;
+}
+
+export interface FloatingBurst {
+  id: number;
+  label: string;
+  landIndex: number;
 }
 
 export interface Progression {
@@ -108,4 +133,24 @@ export interface SellCropResponse {
     quantity: number;
     gained: number;
   };
+}
+
+export interface LeaderboardPlayer {
+  rank: number;
+  user: TelegramUser;
+  coin: number;
+  progression: Progression;
+  isCurrentUser: boolean;
+}
+
+export interface SocialListResponse {
+  ok: true;
+  players: LeaderboardPlayer[];
+  currentUser: LeaderboardPlayer | null;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  query: string;
+  tab: SocialTab;
 }

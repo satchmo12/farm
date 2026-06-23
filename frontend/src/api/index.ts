@@ -3,6 +3,8 @@ import type {
   CropType,
   HarvestAllResponse,
   HarvestResponse,
+  SocialListResponse,
+  SocialTab,
   PlantResponse,
   SellCropResponse,
   TelegramLoginResponse,
@@ -72,6 +74,44 @@ export async function sellCropApi(
   return requestJson<SellCropResponse>("/warehouse/sell-crop", {
     method: "POST",
     body: JSON.stringify({ userId, cropType, quantity })
+  });
+}
+
+export async function getLeaderboardApi(
+  options: {
+    userId?: number;
+    page?: number;
+    pageSize?: number;
+    query?: string;
+    tab?: SocialTab;
+  } = {}
+): Promise<SocialListResponse> {
+  const searchParams = new URLSearchParams();
+
+  if (typeof options.userId === "number") {
+    searchParams.set("userId", String(options.userId));
+  }
+
+  if (typeof options.page === "number") {
+    searchParams.set("page", String(options.page));
+  }
+
+  if (typeof options.pageSize === "number") {
+    searchParams.set("pageSize", String(options.pageSize));
+  }
+
+  if (options.query?.trim()) {
+    searchParams.set("query", options.query.trim());
+  }
+
+  if (options.tab) {
+    searchParams.set("tab", options.tab);
+  }
+
+  const query = searchParams.toString();
+
+  return requestJson<SocialListResponse>(`/leaderboard${query ? `?${query}` : ""}`, {
+    method: "GET"
   });
 }
 

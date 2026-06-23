@@ -75,22 +75,23 @@ button:disabled {
 }
 
 .farm-app {
-  width: min(1280px, calc(100% - 24px));
-  margin: 0 auto;
-  padding: 18px 0 30px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .game-shell {
   position: relative;
-  min-height: calc(100vh - 36px);
+  min-height: 100vh;
+  min-height: 100svh;
   overflow: hidden;
-  border-radius: 42px;
-  padding: 18px 18px 30px;
+  border-radius: 0;
+  padding: 0;
   background:
     radial-gradient(circle at 50% 68%, rgba(255, 245, 191, 0.86), transparent 26%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0)),
     linear-gradient(180deg, rgba(106, 176, 68, 0.16), rgba(77, 134, 42, 0.22));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 18px 46px rgba(33, 77, 24, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .hud-bar,
@@ -106,6 +107,11 @@ button:disabled {
 }
 
 .hud-bar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -249,18 +255,20 @@ button:disabled {
 }
 
 .game-layout {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 16px;
-  margin-top: 12px;
-  align-items: start;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .side-rail {
+  position: absolute;
+  top: 140px;
+  right: 22px;
+  z-index: 5;
   display: grid;
   gap: 14px;
   justify-items: center;
-  padding-top: 80px;
+  padding-top: 0;
 }
 
 .rail-button {
@@ -295,8 +303,9 @@ button:disabled {
 
 .scene-stage {
   position: relative;
-  min-height: 840px;
-  border-radius: 40px;
+  min-height: 100vh;
+  min-height: 100svh;
+  border-radius: 0;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
@@ -327,7 +336,8 @@ button:disabled {
 .scene-stage__canvas {
   position: relative;
   width: max(100%, 1380px);
-  min-height: 840px;
+  min-height: 100vh;
+  min-height: 100svh;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
     url("./assets/game-scene-bg.svg") center / cover no-repeat;
@@ -350,8 +360,8 @@ button:disabled {
 
 .scene-hint {
   position: absolute;
-  top: 180px;
-  right: 56px;
+  right: 130px;
+  bottom: 26px;
   display: grid;
   gap: 4px;
   padding: 14px 18px;
@@ -393,7 +403,7 @@ button:disabled {
 .farm-board {
   position: absolute;
   left: 50%;
-  bottom: 96px;
+  bottom: 108px;
   transform: translateX(-50%);
   display: grid;
   justify-items: center;
@@ -403,7 +413,7 @@ button:disabled {
 .scene-pan-note {
   position: absolute;
   left: 50%;
-  bottom: 22px;
+  bottom: 28px;
   transform: translateX(-50%);
   z-index: 2;
   margin: 0;
@@ -868,6 +878,10 @@ button:disabled {
   backdrop-filter: blur(10px);
 }
 
+.seed-panel__title {
+  min-width: 0;
+}
+
 .seed-panel__header h2 {
   margin: 6px 0 0;
   font-family: var(--heading-font);
@@ -892,6 +906,12 @@ button:disabled {
 .seed-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -933,6 +953,24 @@ button:disabled {
 .seed-card span,
 .warehouse-card p {
   color: var(--ink-soft);
+}
+
+.seed-card__desc {
+  margin: 0;
+  min-height: 2.8em;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.seed-card--shop-grid {
+  width: 100%;
+  text-align: left;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.seed-card--shop-grid:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 24px rgba(80, 49, 16, 0.14);
 }
 
 .seed-card__chips {
@@ -1103,6 +1141,310 @@ button:disabled {
   font-size: 2rem;
   line-height: 1;
   color: var(--ink);
+}
+
+.shop-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(47, 36, 24, 0.32);
+  backdrop-filter: blur(8px);
+}
+
+.shop-confirm-card {
+  width: min(460px, 100%);
+  padding: 20px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #fff8ea, #f1e2c1);
+  box-shadow: 0 22px 40px rgba(67, 41, 14, 0.2);
+  display: grid;
+  gap: 16px;
+}
+
+.shop-confirm-card__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.shop-confirm-card__emoji {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  background: rgba(255, 236, 181, 0.72);
+}
+
+.shop-confirm-card__hero strong {
+  display: block;
+  font-size: 1.5rem;
+  font-family: var(--heading-font);
+}
+
+.shop-confirm-card__hero p,
+.shop-confirm-card__quantity p,
+.leaderboard-panel__header p,
+.leaderboard-card__meta p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+}
+
+.shop-confirm-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shop-confirm-card__stats article {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 248, 232, 0.88);
+  display: grid;
+  gap: 6px;
+}
+
+.shop-confirm-card__stats span,
+.shop-confirm-card__quantity span,
+.leaderboard-card__stats {
+  color: var(--ink-soft);
+}
+
+.shop-confirm-card__stats strong {
+  font-size: 1.2rem;
+  font-family: var(--heading-font);
+}
+
+.shop-confirm-card__quantity {
+  display: grid;
+  gap: 10px;
+}
+
+.shop-quantity-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.shop-quantity-stepper__button,
+.shop-quantity-stepper__input {
+  border: 0;
+  border-radius: 16px;
+  height: 46px;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.shop-quantity-stepper__button {
+  color: #fff9ef;
+  background: linear-gradient(180deg, #8f6734, #6e4b20);
+}
+
+.shop-quantity-stepper__input {
+  background: rgba(255, 252, 243, 0.94);
+  box-shadow: inset 0 0 0 1px rgba(84, 58, 24, 0.12);
+}
+
+.shop-confirm-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.social-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 14px;
+  height: min(72vh, 760px);
+  max-height: min(72vh, 760px);
+}
+
+.social-panel__top {
+  display: grid;
+  gap: 12px;
+}
+
+.social-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.social-search {
+  position: relative;
+  display: block;
+}
+
+.social-search__icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(105, 72, 31, 0.72);
+  font-size: 1.1rem;
+}
+
+.social-search__input {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 16px 14px 44px;
+  background: linear-gradient(180deg, rgba(187, 126, 48, 0.22), rgba(154, 96, 24, 0.26));
+  box-shadow: inset 0 0 0 1px rgba(126, 80, 22, 0.16);
+  color: #613c14;
+}
+
+.social-search__input::placeholder {
+  color: rgba(105, 72, 31, 0.58);
+}
+
+.leaderboard-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.leaderboard-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.social-result-count {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.84rem;
+  color: #8a5a24;
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 10px;
+}
+
+.social-panel__list-shell {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.leaderboard-list--scroll {
+  min-height: 0;
+  max-height: 100%;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.leaderboard-card {
+  padding: 14px 16px;
+  border-radius: 20px;
+  display: grid;
+  grid-template-columns: 56px 64px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  background: linear-gradient(180deg, #fff9ed, #f3e7d2);
+  box-shadow: var(--shadow-soft);
+}
+
+.leaderboard-card__rank {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #6b4518;
+  background: rgba(255, 244, 201, 0.92);
+}
+
+.leaderboard-avatar,
+.social-self-card__avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff8ee;
+  font-weight: 800;
+  font-size: 1.3rem;
+  background: linear-gradient(180deg, #d58af7, #b25be8);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.26);
+  background-size: cover;
+  background-position: center;
+}
+
+.leaderboard-avatar--image,
+.social-self-card__avatar--image {
+  background-color: rgba(255, 240, 214, 0.92);
+}
+
+.leaderboard-card__meta strong {
+  display: block;
+  font-size: 1.08rem;
+}
+
+.leaderboard-card__stats {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  font-size: 0.84rem;
+  text-align: right;
+}
+
+.social-panel__empty {
+  min-height: 100%;
+}
+
+.social-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.social-pagination strong {
+  min-width: 64px;
+  text-align: center;
+  font-family: var(--heading-font);
+  font-size: 1.1rem;
+}
+
+.social-self-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #c36f1d, #a85d17);
+  color: #fffaf2;
+  box-shadow: 0 14px 22px rgba(102, 52, 13, 0.18);
+}
+
+.social-self-card__meta strong,
+.social-self-card__rank strong {
+  display: block;
+  font-size: 1.2rem;
+}
+
+.social-self-card__meta p,
+.social-self-card__rank span {
+  margin: 4px 0 0;
+  color: rgba(255, 242, 212, 0.86);
+}
+
+.social-self-card__rank {
+  min-width: 92px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  text-align: center;
+  background: rgba(95, 46, 11, 0.22);
 }
 
 .growth-panel {
@@ -1358,22 +1700,8 @@ button:disabled {
 
 @media (max-width: 1024px) {
   .hud-bar,
-  .game-layout,
   .dock-bar {
     grid-template-columns: 1fr;
-  }
-
-  .hud-overlay {
-    position: relative;
-    inset: auto;
-    margin-bottom: 12px;
-  }
-
-  .hud-bar {
-    flex-direction: column;
-    align-items: stretch;
-    min-height: 0;
-    padding: 12px 16px;
   }
 
   .resource-ribbon {
@@ -1384,36 +1712,33 @@ button:disabled {
     flex: 1 1 190px;
   }
 
-  .game-layout {
-    grid-template-columns: 1fr;
-  }
-
   .side-rail {
-    grid-auto-flow: column;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    justify-items: stretch;
-    padding-top: 0;
+    top: 136px;
+    right: 18px;
   }
 
   .rail-button {
-    width: 100%;
     min-height: 78px;
   }
 
   .scene-stage {
-    min-height: 820px;
+    min-height: 100vh;
+    min-height: 100svh;
   }
 
   .scene-stage__canvas {
     width: max(100%, 1240px);
-    min-height: 820px;
+    min-height: 100vh;
+    min-height: 100svh;
   }
 
   .scene-hint {
-    right: 18px;
+    right: 116px;
+    bottom: 22px;
   }
 
   .seed-grid,
+  .shop-grid,
   .warehouse-grid,
   .growth-panel__facts,
   .profile-stats {
@@ -1423,14 +1748,15 @@ button:disabled {
 
 @media (max-width: 720px) {
   .farm-app {
-    width: min(100% - 10px, 100%);
-    padding: 8px 0 18px;
+    width: 100%;
+    padding: 0;
   }
 
   .game-shell {
-    min-height: calc(100vh - 16px);
-    border-radius: 30px;
-    padding: 14px 12px 22px;
+    min-height: 100vh;
+    min-height: 100svh;
+    border-radius: 0;
+    padding: 0;
   }
 
   .seed-panel {
@@ -1438,48 +1764,158 @@ button:disabled {
   }
 
   .seed-panel__header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .player-medallion {
-    min-width: 0;
-  }
-
-  .player-medallion__avatar {
-    width: 62px;
-    height: 62px;
-    font-size: 1.8rem;
-  }
-
-  .resource-ribbon {
-    gap: 10px;
+    align-items: flex-start;
+    padding-right: 58px;
   }
 
   .hud-overlay {
-    margin-bottom: 10px;
+    top: 10px;
+    left: 10px;
+    margin-bottom: 0;
+    z-index: 6;
+  }
+
+  .hud-bar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    min-height: 76px;
+    padding: 8px 10px 8px 164px;
+    align-items: center;
+    justify-content: flex-end;
+    border-radius: 24px;
+  }
+
+  .player-medallion {
+    min-width: 146px;
+    max-width: 150px;
+    padding: 7px 9px 7px 7px;
+    gap: 8px;
+    border-radius: 22px;
+  }
+
+  .player-medallion__avatar {
+    width: 50px;
+    height: 50px;
+    font-size: 1.35rem;
+  }
+
+  .player-medallion__meta strong {
+    font-size: 0.9rem;
+  }
+
+  .player-medallion__meta p {
+    font-size: 0.72rem;
+  }
+
+  .player-progress {
+    margin-top: 5px;
+    gap: 3px;
+  }
+
+  .player-progress__track {
+    width: 100%;
+    height: 7px;
+  }
+
+  .player-progress__text {
+    font-size: 0.6rem;
+  }
+
+  .resource-ribbon {
+    gap: 0;
+    flex-wrap: nowrap;
   }
 
   .resource-pill {
     min-width: 0;
-    padding: 10px 12px;
+    flex: 0 1 154px;
+    padding: 8px 10px;
+    border-radius: 20px;
+  }
+
+  .resource-pill__icon {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+  }
+
+  .resource-pill p {
+    font-size: 0.7rem;
+  }
+
+  .resource-pill strong {
+    font-size: 1.02rem;
+  }
+
+  .side-rail {
+    top: 92px;
+    right: 10px;
+    z-index: 5;
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-top: 0;
+    width: 58px;
+  }
+
+  .rail-button {
+    width: 58px;
+    min-height: 58px;
+    padding: 6px 4px;
+    border-radius: 20px;
+    gap: 4px;
+  }
+
+  .rail-button__icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.92rem;
+  }
+
+  .rail-button span:last-child {
+    font-size: 0.58rem;
+    line-height: 1;
   }
 
   .scene-stage {
-    min-height: 720px;
+    min-height: 100vh;
+    min-height: 100svh;
+    border-radius: 0;
   }
 
   .scene-stage__canvas {
-    width: max(100%, 1080px);
-    min-height: 720px;
+    width: max(100%, 980px);
+    min-height: 100vh;
+    min-height: 100svh;
   }
 
   .scene-hint {
-    display: none;
+    top: auto;
+    left: 12px;
+    right: 80px;
+    bottom: 16px;
+    gap: 5px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    z-index: 3;
+  }
+
+  .scene-hint strong,
+  .scene-hint span {
+    text-align: center;
+  }
+
+  .harvest-all-button {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    font-size: 0.84rem;
   }
 
   .farm-board {
-    bottom: 84px;
+    bottom: 96px;
   }
 
   .farm-board__sign {
@@ -1505,11 +1941,18 @@ button:disabled {
   }
 
   .seed-grid,
+  .shop-grid,
   .warehouse-grid,
   .growth-panel__facts,
   .profile-stats {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .close-button {
+    position: absolute;
+    top: 0;
+    right: 0;
   }
 
   .growth-panel__hero {
@@ -1520,11 +1963,43 @@ button:disabled {
   .growth-panel__emoji {
     justify-self: center;
   }
+
+  .shop-confirm-card__stats,
+  .leaderboard-card {
+    grid-template-columns: 1fr;
+  }
+
+  .leaderboard-avatar {
+    justify-self: start;
+  }
+
+  .leaderboard-card__stats {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .leaderboard-panel__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .social-self-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .social-self-card__avatar {
+    justify-self: center;
+  }
+
+  .social-self-card__rank {
+    justify-self: center;
+  }
 }
 
 @media (max-width: 560px) {
   .scene-stage__canvas {
-    width: max(100%, 960px);
+    width: max(100%, 900px);
   }
 
   .game-shell .farm-grid {
@@ -1533,12 +2008,29 @@ button:disabled {
 }
 
 @media (max-width: 420px) {
-  .game-shell {
-    border-radius: 24px;
+  .hud-bar {
+    min-height: 72px;
+    padding-left: 152px;
   }
 
-  .resource-ribbon {
-    grid-template-columns: 1fr;
+  .player-medallion {
+    min-width: 136px;
+    max-width: 140px;
+  }
+
+  .player-medallion__avatar {
+    width: 46px;
+    height: 46px;
+    font-size: 1.2rem;
+  }
+
+  .resource-pill {
+    flex-basis: 144px;
+    padding: 8px 9px;
+  }
+
+  .resource-pill strong {
+    font-size: 0.96rem;
   }
 
   .game-shell .farm-grid {
@@ -1547,11 +2039,27 @@ button:disabled {
   }
 
   .scene-pan-note {
-    bottom: 16px;
+    bottom: 84px;
     font-size: 0.72rem;
   }
 
-  .dock-bar {
-    flex-direction: column;
+  .scene-hint span {
+    display: none;
+  }
+
+  .scene-hint {
+    right: 74px;
+    bottom: 12px;
+    padding: 9px 10px;
+  }
+
+  .side-rail {
+    top: 88px;
+    width: 54px;
+  }
+
+  .rail-button {
+    width: 54px;
+    min-height: 54px;
   }
 }

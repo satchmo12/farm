@@ -23,6 +23,7 @@ interface TelegramUser {
   id: number;
   username?: string;
   first_name: string;
+  photo_url?: string;
 }
 
 interface Land {
@@ -154,12 +155,37 @@ interface SellCropResponse {
   };
 }
 
+interface LeaderboardPlayer {
+  rank: number;
+  user: TelegramUser;
+  coin: number;
+  progression: Progression;
+  isCurrentUser: boolean;
+}
+
+interface LeaderboardResponse {
+  ok: true;
+  players: LeaderboardPlayer[];
+  currentUser: LeaderboardPlayer | null;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  query: string;
+  tab: "leaderboard" | "friends";
+}
+
 interface UserRow {
   id: number;
   first_name: string;
   username: string | null;
+  avatar_url: string | null;
   coin: number;
   experience: number;
+}
+
+interface RankedUserRow extends UserRow {
+  rank: number;
 }
 
 interface LandRow {
@@ -228,6 +254,10 @@ export default {
 
     if (url.pathname === "/warehouse/sell-crop" && req.method === "POST") {
       return handleSellCrop(req, env);
+    }
+
+    if (url.pathname === "/leaderboard" && req.method === "GET") {
+      return handleLeaderboard(req, env);
     }
 
     return jsonResponse(
@@ -648,6 +678,37 @@ async function handleSellCrop(req: Request, env: Env): Promise<Response> {
   });
 }
 
+async function handleLeaderboard(req: Request, env: Env): Promise<Response> {
+  const url = new URL(req.url);
+  const userIdParam = url.searchParams.get("userId");
+  const userId =
+    userIdParam === null || userIdParam.trim() === ""
+      ? null
+      : Number(userIdParam);
+  const tab = url.searchParams.get("tab") === "friends" ? "friends" : "leaderboard";
+  const page = parsePage(url.searchParams.get("page"));
+  const pageSize = parsePageSize(url.searchParams.get("pageSize"));
+  const query = normalizeSearchQuery(url.searchParams.get("query"));
+
+  if (userId !== null) {
+    const validationError = validateUserId(userId);
+
+    if (validationError) {
+      return jsonResponse({ error: validationError }, 400);
+    }
+  }
+
+  const data = await getLeaderboard(env.DB, {
+    currentUserId: userId ?? undefined,
+    page,
+    pageSize,
+    query,
+    tab,
+  });
+
+  return jsonResponse<LeaderboardResponse>(data);
+}
+
 async function parseJson<T>(req: Request): Promise<T | null> {
   try {
     return (await req.json()) as T;
@@ -672,6 +733,13 @@ function validateTelegramUser(user: TelegramUser): string | null {
     return "username 不能为空字符串";
   }
 
+  if (
+    user.photo_url !== undefined &&
+    (typeof user.photo_url !== "string" || user.photo_url.trim() === "")
+  ) {
+    return "photo_url 不能为空字符串";
+  }
+
   return null;
 }
 
@@ -681,6 +749,38 @@ function validateUserId(userId: number): string | null {
   }
 
   return null;
+}
+
+function parsePage(value: string | null): number {
+  if (!value) {
+    return 1;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return 1;
+  }
+
+  return Math.min(parsed, 999);
+}
+
+function parsePageSize(value: string | null): number {
+  if (!value) {
+    return 5;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return 5;
+  }
+
+  return Math.min(parsed, 20);
+}
+
+function normalizeSearchQuery(value: string | null): string {
+  return (value ?? "").trim().slice(0, 40);
 }
 
 function validateFarmAction(userId: number, position: number): string | null {
@@ -703,7 +803,7 @@ async function getUserById(
 ): Promise<UserRow | null> {
   return db
     .prepare(
-      "SELECT id, first_name, username, coin, experience FROM users WHERE id = ? LIMIT 1"
+      "SELECT id, first_name, username, avatar_url, coin, experience FROM users WHERE id = ? LIMIT 1"
     )
     .bind(userId)
     .first<UserRow>();
@@ -713,9 +813,15 @@ async function createUserFarm(db: D1Database, user: TelegramUser): Promise<void>
   const statements = [
     db
       .prepare(
-        "INSERT OR IGNORE INTO users (id, first_name, username, coin, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)"
+        "INSERT OR IGNORE INTO users (id, first_name, username, avatar_url, coin, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
       )
-      .bind(user.id, user.first_name, user.username ?? null, STARTER_COIN),
+      .bind(
+        user.id,
+        user.first_name,
+        user.username ?? null,
+        user.photo_url ?? null,
+        STARTER_COIN
+      ),
     ...createLandInsertStatements(db, user.id),
   ];
 
@@ -729,12 +835,13 @@ async function syncTelegramUser(
 ): Promise<void> {
   if (
     existingUser.first_name === user.first_name &&
-    (user.username === undefined || existingUser.username === user.username)
+    (user.username === undefined || existingUser.username === user.username) &&
+    (user.photo_url === undefined || existingUser.avatar_url === user.photo_url)
   ) {
     return;
   }
 
-  if (user.username === undefined) {
+  if (user.username === undefined && user.photo_url === undefined) {
     await db
       .prepare(
         "UPDATE users SET first_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
@@ -746,9 +853,9 @@ async function syncTelegramUser(
 
   await db
     .prepare(
-      "UPDATE users SET first_name = ?, username = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+      "UPDATE users SET first_name = ?, username = COALESCE(?, username), avatar_url = COALESCE(?, avatar_url), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
     )
-    .bind(user.first_name, user.username, user.id)
+    .bind(user.first_name, user.username ?? null, user.photo_url ?? null, user.id)
     .run();
 }
 
@@ -933,6 +1040,7 @@ async function getFarmProfile(
       id: user.id,
       first_name: user.first_name,
       username: user.username ?? undefined,
+      photo_url: user.avatar_url ?? undefined,
     },
     coin: typeof user.coin === "number" ? user.coin : 0,
     progression: getProgression(user.experience),
@@ -943,6 +1051,147 @@ async function getFarmProfile(
     }),
     inventory,
   };
+}
+
+async function getLeaderboard(
+  db: D1Database,
+  options: {
+    currentUserId?: number;
+    page: number;
+    pageSize: number;
+    query: string;
+    tab: "leaderboard" | "friends";
+  }
+): Promise<LeaderboardResponse> {
+  const currentUser = options.currentUserId
+    ? await getRankedUserById(db, options.currentUserId)
+    : null;
+
+  if (options.tab === "friends" && options.query === "") {
+    return {
+      ok: true,
+      players: [],
+      currentUser: currentUser
+        ? serializeLeaderboardPlayer(currentUser, options.currentUserId)
+        : null,
+      page: 1,
+      pageSize: options.pageSize,
+      total: 0,
+      totalPages: 1,
+      query: options.query,
+      tab: options.tab,
+    };
+  }
+
+  const offset = (options.page - 1) * options.pageSize;
+  const searchPattern =
+    options.query === "" ? null : `%${escapeSqlLike(options.query.toLowerCase())}%`;
+  const excludeCurrentUser = options.currentUserId ?? null;
+
+  const countResult = await db
+    .prepare(
+      `
+      WITH ranked_users AS (
+        SELECT
+          id,
+          first_name,
+          username,
+          avatar_url,
+          coin,
+          experience,
+          ROW_NUMBER() OVER (ORDER BY experience DESC, coin DESC, id ASC) AS rank
+        FROM users
+      )
+      SELECT COUNT(*) AS total
+      FROM ranked_users
+      WHERE (?1 IS NULL OR id != ?1)
+        AND (
+          ?2 IS NULL OR
+          LOWER(first_name) LIKE ?2 ESCAPE '\\' OR
+          LOWER(COALESCE(username, '')) LIKE ?2 ESCAPE '\\'
+        )
+      `
+    )
+    .bind(excludeCurrentUser, searchPattern)
+    .first<{ total: number }>();
+  const total = typeof countResult?.total === "number" ? countResult.total : 0;
+  const totalPages = Math.max(1, Math.ceil(total / options.pageSize));
+  const page = Math.min(options.page, totalPages);
+  const safeOffset = (page - 1) * options.pageSize;
+
+  const listResult = await db
+    .prepare(
+      `
+      WITH ranked_users AS (
+        SELECT
+          id,
+          first_name,
+          username,
+          avatar_url,
+          coin,
+          experience,
+          ROW_NUMBER() OVER (ORDER BY experience DESC, coin DESC, id ASC) AS rank
+        FROM users
+      )
+      SELECT id, first_name, username, avatar_url, coin, experience, rank
+      FROM ranked_users
+      WHERE (?1 IS NULL OR id != ?1)
+        AND (
+          ?2 IS NULL OR
+          LOWER(first_name) LIKE ?2 ESCAPE '\\' OR
+          LOWER(COALESCE(username, '')) LIKE ?2 ESCAPE '\\'
+        )
+      ORDER BY rank
+      LIMIT ?3 OFFSET ?4
+      `
+    )
+    .bind(excludeCurrentUser, searchPattern, options.pageSize, safeOffset)
+    .all<RankedUserRow>();
+  const players = (listResult.results ?? []).map((row) =>
+    serializeLeaderboardPlayer(row, options.currentUserId)
+  );
+
+  return {
+    ok: true,
+    players,
+    currentUser: currentUser
+      ? serializeLeaderboardPlayer(currentUser, options.currentUserId)
+      : null,
+    page,
+    pageSize: options.pageSize,
+    total,
+    totalPages,
+    query: options.query,
+    tab: options.tab,
+  };
+}
+
+async function getRankedUserById(
+  db: D1Database,
+  userId: number
+): Promise<RankedUserRow | null> {
+  return db
+    .prepare(
+      `
+      WITH ranked_users AS (
+        SELECT
+          id,
+          first_name,
+          username,
+          avatar_url,
+          coin,
+          experience,
+          ROW_NUMBER() OVER (ORDER BY experience DESC, coin DESC, id ASC) AS rank
+        FROM users
+      )
+      SELECT id, first_name, username, avatar_url, coin, experience, rank
+      FROM ranked_users
+      WHERE id = ?1
+      LIMIT 1
+      `
+    )
+    .bind(userId)
+    .first<RankedUserRow>();
 }
 
 function getProgression(experience: number): Progression {
@@ -984,6 +1233,28 @@ function getLevelTotalExperience(level: number): number {
   const step = level - 1;
 
   return 60 * step + 15 * step * (step - 1);
+}
+
+function serializeLeaderboardPlayer(
+  row: RankedUserRow,
+  currentUserId?: number
+): LeaderboardPlayer {
+  return {
+    rank: row.rank,
+    user: {
+      id: row.id,
+      first_name: row.first_name,
+      username: row.username ?? undefined,
+      photo_url: row.avatar_url ?? undefined,
+    },
+    coin: typeof row.coin === "number" ? row.coin : 0,
+    progression: getProgression(row.experience),
+    isCurrentUser: row.id === currentUserId,
+  };
+}
+
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 function serializeInventory(rows: InventoryRow[]): Inventory {
