@@ -1,0 +1,14 @@
+<svg width="1200" height="180" viewBox="0 0 1200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wood" x1="600" y1="0" x2="600" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6C87C"/>
+      <stop offset="0.55" stop-color="#E19A4D"/>
+      <stop offset="1" stop-color="#C67631"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="8" width="1188" height="164" rx="54" fill="url(#wood)"/>
+  <rect x="6" y="8" width="1188" height="164" rx="54" stroke="#B56622" stroke-width="12"/>
+  <rect x="30" y="24" width="1140" height="28" rx="14" fill="#FFDDA0" fill-opacity="0.42"/>
+  <path d="M126 24C198 66 252 80 344 88C472 98 570 52 704 44C838 36 926 78 1080 68" stroke="#B46E2F" stroke-opacity="0.42" stroke-width="10" stroke-linecap="round"/>
+  <path d="M92 128C208 102 344 106 456 130C566 154 674 152 792 126C908 100 1020 104 1120 134" stroke="#A85F29" stroke-opacity="0.38" stroke-width="10" stroke-linecap="round"/>
+</svg>

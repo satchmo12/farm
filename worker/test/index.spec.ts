@@ -11,7 +11,7 @@ const schemaStatements = [
   "DROP TABLE IF EXISTS inventory_items",
   "DROP TABLE IF EXISTS lands",
   "DROP TABLE IF EXISTS users",
-  "CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, username TEXT, coin INTEGER NOT NULL DEFAULT 0 CHECK (coin >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP) STRICT",
+  "CREATE TABLE users (id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, username TEXT, coin INTEGER NOT NULL DEFAULT 0 CHECK (coin >= 0), experience INTEGER NOT NULL DEFAULT 0 CHECK (experience >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP) STRICT",
   "CREATE TABLE lands (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, position INTEGER NOT NULL CHECK (position >= 0 AND position < 24), status TEXT NOT NULL DEFAULT 'empty' CHECK (status IN ('empty', 'growing', 'ready')), remain INTEGER NOT NULL DEFAULT 0 CHECK (remain >= 0), crop_type TEXT, planted_at TEXT, growth_duration_seconds INTEGER NOT NULL DEFAULT 0 CHECK (growth_duration_seconds >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, position)) STRICT",
   "CREATE INDEX idx_lands_user_id_position ON lands(user_id, position)",
   "CREATE TABLE inventory_items (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, item_type TEXT NOT NULL CHECK (item_type IN ('seed', 'crop')), crop_type TEXT NOT NULL CHECK (crop_type IN ('wheat', 'corn', 'tomato')), quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, UNIQUE(user_id, item_type, crop_type)) STRICT",
@@ -50,6 +50,12 @@ describe("farm gameplay", () => {
       created: boolean;
       profile: {
         coin: number;
+        progression: {
+          experience: number;
+          level: number;
+          progressInLevel: number;
+          requiredExperience: number;
+        };
         inventory: {
           seeds: Array<{ cropType: string; quantity: number }>;
           crops: Array<{ cropType: string; quantity: number }>;
@@ -62,6 +68,8 @@ describe("farm gameplay", () => {
     expect(data.ok).toBe(true);
     expect(data.created).toBe(true);
     expect(data.profile.coin).toBe(120);
+    expect(data.profile.progression.level).toBe(1);
+    expect(data.profile.progression.experience).toBe(0);
     expect(data.profile.user).toEqual({
       id: 1001,
       first_name: "Alice",
@@ -110,6 +118,7 @@ describe("farm gameplay", () => {
     const data = (await response.json()) as {
       ok: boolean;
       coin: number;
+      progression: { level: number };
       inventory: {
         seeds: Array<{ cropType: string; quantity: number }>;
       };
@@ -123,6 +132,7 @@ describe("farm gameplay", () => {
 
     expect(data.ok).toBe(true);
     expect(data.coin).toBe(120);
+    expect(data.progression.level).toBe(1);
     expect(data.land.status).toBe("growing");
     expect(data.land.cropType).toBe("corn");
     expect(data.land.stage).toBe(1);
@@ -164,6 +174,11 @@ describe("farm gameplay", () => {
     const data = (await response.json()) as {
       ok: boolean;
       coin: number;
+      progression: {
+        experience: number;
+        level: number;
+      };
+      gainedExperience: number;
       harvested: {
         cropType: string;
         quantity: number;
@@ -179,6 +194,9 @@ describe("farm gameplay", () => {
     };
 
     expect(data.ok).toBe(true);
+    expect(data.gainedExperience).toBe(8);
+    expect(data.progression.experience).toBe(8);
+    expect(data.progression.level).toBe(1);
     expect(data.harvested).toEqual({
       cropType: "wheat",
       quantity: 1,
@@ -225,12 +243,14 @@ describe("farm gameplay", () => {
     const buyData = (await buyResponse.json()) as {
       ok: boolean;
       coin: number;
+      progression: { level: number };
       purchased: { cropType: string; quantity: number; cost: number };
       inventory: { seeds: Array<{ cropType: string; quantity: number }> };
     };
 
     expect(buyData.ok).toBe(true);
     expect(buyData.coin).toBe(102);
+    expect(buyData.progression.level).toBe(1);
     expect(buyData.purchased).toEqual({
       cropType: "wheat",
       quantity: 3,
@@ -265,12 +285,14 @@ describe("farm gameplay", () => {
     const sellData = (await sellResponse.json()) as {
       ok: boolean;
       coin: number;
+      progression: { level: number };
       sold: { cropType: string; quantity: number; gained: number };
       inventory: { crops: Array<{ cropType: string; quantity: number }> };
     };
 
     expect(sellData.ok).toBe(true);
     expect(sellData.coin).toBe(154);
+    expect(sellData.progression.level).toBe(1);
     expect(sellData.sold).toEqual({
       cropType: "tomato",
       quantity: 2,
@@ -286,9 +308,9 @@ describe("farm gameplay", () => {
 async function createUserFarm(userId: number): Promise<void> {
   await env.DB
     .prepare(
-      "INSERT INTO users (id, first_name, username, coin) VALUES (?, ?, ?, ?)"
+      "INSERT INTO users (id, first_name, username, coin, experience) VALUES (?, ?, ?, ?, ?)"
     )
-    .bind(userId, "Alice", "alice", 120)
+    .bind(userId, "Alice", "alice", 120, 0)
     .run();
 
   for (let position = 0; position < 24; position++) {

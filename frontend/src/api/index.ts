@@ -1,6 +1,7 @@
 import type {
   BuySeedResponse,
   CropType,
+  HarvestAllResponse,
   HarvestResponse,
   PlantResponse,
   SellCropResponse,
@@ -40,6 +41,15 @@ export async function harvestApi(
   return requestJson<HarvestResponse>("/harvest", {
     method: "POST",
     body: JSON.stringify({ userId, position })
+  });
+}
+
+export async function harvestAllApi(
+  userId: number
+): Promise<HarvestAllResponse> {
+  return requestJson<HarvestAllResponse>("/harvest-all", {
+    method: "POST",
+    body: JSON.stringify({ userId })
   });
 }
 

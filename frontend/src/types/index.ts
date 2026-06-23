@@ -27,9 +27,19 @@ export interface Inventory {
   crops: InventoryEntry[];
 }
 
+export interface Progression {
+  experience: number;
+  level: number;
+  currentLevelExperience: number;
+  nextLevelExperience: number;
+  progressInLevel: number;
+  requiredExperience: number;
+}
+
 export interface FarmProfile {
   user: TelegramUser;
   coin: number;
+  progression: Progression;
   lands: Land[];
   inventory: Inventory;
 }
@@ -43,6 +53,7 @@ export interface TelegramLoginResponse {
 export interface PlantResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   land: Land;
 }
@@ -50,6 +61,8 @@ export interface PlantResponse {
 export interface HarvestResponse {
   ok: true;
   coin: number;
+  progression: Progression;
+  gainedExperience: number;
   inventory: Inventory;
   harvested: {
     cropType: CropType;
@@ -58,9 +71,25 @@ export interface HarvestResponse {
   land: Land;
 }
 
+export interface HarvestAllResponse {
+  ok: true;
+  coin: number;
+  progression: Progression;
+  gainedExperience: number;
+  harvestedCount: number;
+  harvested: Array<{
+    position: number;
+    cropType: CropType;
+    quantity: number;
+  }>;
+  inventory: Inventory;
+  lands: Land[];
+}
+
 export interface BuySeedResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   purchased: {
     cropType: CropType;
@@ -72,6 +101,7 @@ export interface BuySeedResponse {
 export interface SellCropResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   sold: {
     cropType: CropType;

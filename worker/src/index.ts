@@ -16,6 +16,7 @@ interface CropConfig {
   growthDurationSeconds: number;
   seedPrice: number;
   sellPrice: number;
+  harvestExperience: number;
 }
 
 interface TelegramUser {
@@ -46,8 +47,18 @@ interface Inventory {
 interface FarmProfile {
   user: TelegramUser;
   coin: number;
+  progression: Progression;
   lands: Land[];
   inventory: Inventory;
+}
+
+interface Progression {
+  experience: number;
+  level: number;
+  currentLevelExperience: number;
+  nextLevelExperience: number;
+  progressInLevel: number;
+  requiredExperience: number;
 }
 
 interface LoginResponse {
@@ -59,6 +70,7 @@ interface LoginResponse {
 interface PlantResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   land: Land;
 }
@@ -66,12 +78,29 @@ interface PlantResponse {
 interface HarvestResponse {
   ok: true;
   coin: number;
+  progression: Progression;
+  gainedExperience: number;
   inventory: Inventory;
   harvested: {
     cropType: CropType;
     quantity: number;
   };
   land: Land;
+}
+
+interface HarvestAllResponse {
+  ok: true;
+  coin: number;
+  progression: Progression;
+  gainedExperience: number;
+  harvestedCount: number;
+  harvested: Array<{
+    position: number;
+    cropType: CropType;
+    quantity: number;
+  }>;
+  inventory: Inventory;
+  lands: Land[];
 }
 
 interface PlantRequest {
@@ -85,6 +114,10 @@ interface HarvestRequest {
   position: number;
 }
 
+interface HarvestAllRequest {
+  userId: number;
+}
+
 interface BuySeedRequest {
   userId: number;
   cropType: CropType;
@@ -94,6 +127,7 @@ interface BuySeedRequest {
 interface BuySeedResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   purchased: {
     cropType: CropType;
@@ -111,6 +145,7 @@ interface SellCropRequest {
 interface SellCropResponse {
   ok: true;
   coin: number;
+  progression: Progression;
   inventory: Inventory;
   sold: {
     cropType: CropType;
@@ -124,6 +159,7 @@ interface UserRow {
   first_name: string;
   username: string | null;
   coin: number;
+  experience: number;
 }
 
 interface LandRow {
@@ -146,16 +182,19 @@ const CROPS: Record<CropType, CropConfig> = {
     growthDurationSeconds: 24,
     seedPrice: 6,
     sellPrice: 12,
+    harvestExperience: 8,
   },
   corn: {
     growthDurationSeconds: 36,
     seedPrice: 10,
     sellPrice: 18,
+    harvestExperience: 12,
   },
   tomato: {
     growthDurationSeconds: 48,
     seedPrice: 14,
     sellPrice: 26,
+    harvestExperience: 18,
   },
 };
 
@@ -177,6 +216,10 @@ export default {
 
     if (url.pathname === "/harvest" && req.method === "POST") {
       return handleHarvest(req, env);
+    }
+
+    if (url.pathname === "/harvest-all" && req.method === "POST") {
+      return handleHarvestAll(req, env);
     }
 
     if (url.pathname === "/shop/buy-seed" && req.method === "POST") {
@@ -311,6 +354,7 @@ async function handlePlant(req: Request, env: Env): Promise<Response> {
   return jsonResponse<PlantResponse>({
     ok: true,
     coin: user.coin,
+    progression: getProgression(user.experience),
     inventory,
     land: serializeLand(updated),
   });
@@ -347,26 +391,136 @@ async function handleHarvest(req: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "作物还没有成熟" }, 400);
   }
 
+  const gainedExperience = CROPS[currentLand.cropType].harvestExperience;
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        "UPDATE users SET experience = experience + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+      )
+      .bind(gainedExperience, body.userId),
+    env.DB
+      .prepare(
+        "UPDATE lands SET status = 'empty', remain = 0, crop_type = NULL, planted_at = NULL, growth_duration_seconds = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND position = ?"
+      )
+      .bind(body.userId, body.position),
+  ]);
+
   await addInventoryQuantity(env.DB, body.userId, "crop", currentLand.cropType, 1);
 
-  await env.DB
-    .prepare(
-      "UPDATE lands SET status = 'empty', remain = 0, crop_type = NULL, planted_at = NULL, growth_duration_seconds = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND position = ?"
-    )
-    .bind(body.userId, body.position)
-    .run();
+  const [inventory, refreshedUser] = await Promise.all([
+    getInventory(env.DB, body.userId),
+    getUserById(env.DB, body.userId),
+  ]);
 
-  const inventory = await getInventory(env.DB, body.userId);
+  if (!refreshedUser) {
+    return jsonResponse({ error: "收获成功，但读取用户进度失败" }, 500);
+  }
 
   return jsonResponse<HarvestResponse>({
     ok: true,
-    coin: user.coin,
+    coin: refreshedUser.coin,
+    progression: getProgression(refreshedUser.experience),
+    gainedExperience,
     inventory,
     harvested: {
       cropType: currentLand.cropType,
       quantity: 1,
     },
     land: createEmptyLand(),
+  });
+}
+
+async function handleHarvestAll(req: Request, env: Env): Promise<Response> {
+  const body = await parseJson<HarvestAllRequest>(req);
+
+  if (!body) {
+    return jsonResponse({ error: "请求体不是合法 JSON" }, 400);
+  }
+
+  const validationError = validateUserId(body.userId);
+
+  if (validationError) {
+    return jsonResponse({ error: validationError }, 400);
+  }
+
+  const user = await getUserById(env.DB, body.userId);
+
+  if (!user) {
+    return jsonResponse({ error: "用户不存在，请重新登录" }, 404);
+  }
+
+  const landResult = await env.DB
+    .prepare(
+      "SELECT position, status, remain, crop_type, planted_at, growth_duration_seconds FROM lands WHERE user_id = ? ORDER BY position ASC"
+    )
+    .bind(body.userId)
+    .all<LandRow>();
+
+  const readyLands = (landResult.results ?? [])
+    .map((row) => ({ row, land: serializeLand(row) }))
+    .filter(
+      (entry): entry is { row: LandRow; land: Land & { cropType: CropType } } =>
+        entry.land.status === "ready" && entry.land.cropType !== null
+    );
+
+  if (readyLands.length === 0) {
+    return jsonResponse({ error: "当前没有可收获的作物" }, 400);
+  }
+
+  const harvested = readyLands.map(({ row, land }) => ({
+    position: row.position,
+    cropType: land.cropType,
+    quantity: 1,
+  }));
+  const totalExperience = harvested.reduce(
+    (total, entry) => total + CROPS[entry.cropType].harvestExperience,
+    0
+  );
+  const cropCounts = new Map<CropType, number>();
+
+  for (const entry of harvested) {
+    cropCounts.set(entry.cropType, (cropCounts.get(entry.cropType) ?? 0) + 1);
+  }
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        "UPDATE users SET experience = experience + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+      )
+      .bind(totalExperience, body.userId),
+    ...readyLands.map(({ row }) =>
+      env.DB
+        .prepare(
+          "UPDATE lands SET status = 'empty', remain = 0, crop_type = NULL, planted_at = NULL, growth_duration_seconds = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND position = ?"
+        )
+        .bind(body.userId, row.position)
+    ),
+  ]);
+
+  for (const [cropType, quantity] of cropCounts) {
+    await addInventoryQuantity(env.DB, body.userId, "crop", cropType, quantity);
+  }
+
+  const [inventory, refreshedUser, profile] = await Promise.all([
+    getInventory(env.DB, body.userId),
+    getUserById(env.DB, body.userId),
+    getFarmProfile(env.DB, body.userId),
+  ]);
+
+  if (!refreshedUser) {
+    return jsonResponse({ error: "批量收获成功，但读取用户进度失败" }, 500);
+  }
+
+  return jsonResponse<HarvestAllResponse>({
+    ok: true,
+    coin: refreshedUser.coin,
+    progression: getProgression(refreshedUser.experience),
+    gainedExperience: totalExperience,
+    harvestedCount: harvested.length,
+    harvested,
+    inventory,
+    lands: profile.lands,
   });
 }
 
@@ -419,6 +573,7 @@ async function handleBuySeed(req: Request, env: Env): Promise<Response> {
   return jsonResponse<BuySeedResponse>({
     ok: true,
     coin: user.coin - cost,
+    progression: getProgression(user.experience),
     inventory,
     purchased: {
       cropType: body.cropType,
@@ -483,6 +638,7 @@ async function handleSellCrop(req: Request, env: Env): Promise<Response> {
   return jsonResponse<SellCropResponse>({
     ok: true,
     coin: user.coin + gained,
+    progression: getProgression(user.experience),
     inventory,
     sold: {
       cropType: body.cropType,
@@ -547,7 +703,7 @@ async function getUserById(
 ): Promise<UserRow | null> {
   return db
     .prepare(
-      "SELECT id, first_name, username, coin FROM users WHERE id = ? LIMIT 1"
+      "SELECT id, first_name, username, coin, experience FROM users WHERE id = ? LIMIT 1"
     )
     .bind(userId)
     .first<UserRow>();
@@ -779,6 +935,7 @@ async function getFarmProfile(
       username: user.username ?? undefined,
     },
     coin: typeof user.coin === "number" ? user.coin : 0,
+    progression: getProgression(user.experience),
     lands: Array.from({ length: LAND_COUNT }, (_, position) => {
       const land = landsByPosition.get(position);
 
@@ -786,6 +943,47 @@ async function getFarmProfile(
     }),
     inventory,
   };
+}
+
+function getProgression(experience: number): Progression {
+  const safeExperience =
+    typeof experience === "number" && Number.isFinite(experience)
+      ? Math.max(0, Math.floor(experience))
+      : 0;
+  let level = 1;
+  let currentLevelExperience = 0;
+  let nextLevelExperience = getLevelTotalExperience(2);
+
+  while (safeExperience >= nextLevelExperience) {
+    level += 1;
+    currentLevelExperience = nextLevelExperience;
+    nextLevelExperience = getLevelTotalExperience(level + 1);
+  }
+
+  const progressInLevel = safeExperience - currentLevelExperience;
+  const requiredExperience = Math.max(
+    1,
+    nextLevelExperience - currentLevelExperience
+  );
+
+  return {
+    experience: safeExperience,
+    level,
+    currentLevelExperience,
+    nextLevelExperience,
+    progressInLevel,
+    requiredExperience,
+  };
+}
+
+function getLevelTotalExperience(level: number): number {
+  if (level <= 1) {
+    return 0;
+  }
+
+  const step = level - 1;
+
+  return 60 * step + 15 * step * (step - 1);
 }
 
 function serializeInventory(rows: InventoryRow[]): Inventory {
