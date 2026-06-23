@@ -1,6 +1,7 @@
 <template>
   <div class="farm-app">
     <div class="game-shell">
+      
       <GameHud
         :user="user"
         :coin="coin"
@@ -30,6 +31,7 @@
         />
 
         <SideRail
+          v-if="!visitMode"
           :panel-busy="panelBusy"
           @open-shop="openShopPanel"
           @open-warehouse="openWarehousePanel"
@@ -70,21 +72,26 @@
         :total-crop-count="totalCropCount"
         :warehouse-seeds="warehouseSeeds"
         :warehouse-crops="warehouseCrops"
+        :selected-crop-types="selectedWarehouseCropTypes"
+        :all-crops-selected="allWarehouseCropsSelected"
         :panel-busy="panelBusy"
         @update:warehouse-tab="warehouseTab = $event"
-        @sell="sellStoredCrop"
+        @toggle-select="toggleWarehouseCropSelection"
+        @toggle-select-all="toggleSelectAllWarehouseCrops"
+        @sell-selected="sellSelectedWarehouseCrops"
       />
 
       <ProfilePanel
         v-else-if="activePanel === 'profile'"
-        :user="user"
-        :player-level="playerLevel"
-        :progression="progression"
-        :experience-progress-percent="experienceProgressPercent"
-        :experience-remaining="experienceRemaining"
-        :coin="coin"
-        :total-seed-count="totalSeedCount"
-        :total-crop-count="totalCropCount"
+        :user="profileUser"
+        :player-level="profilePlayerLevel"
+        :progression="profileProgression"
+        :experience-progress-percent="profileExperienceProgressPercent"
+        :experience-remaining="profileExperienceRemaining"
+        :coin="profileCoin"
+        :total-seed-count="profileTotalSeedCount"
+        :total-crop-count="profileTotalCropCount"
+        :visit-mode="visitMode"
       />
 
       <GrowthPanel
@@ -203,6 +210,7 @@ const socialPage = ref(1);
 const socialTotal = ref(0);
 const socialTotalPages = ref(1);
 const visitProfile = ref<FarmProfile | null>(null);
+const selectedWarehouseCropTypes = ref<CropType[]>([]);
 
 const totalSeedCount = computed(() =>
   inventory.value.seeds.reduce((total, entry) => total + entry.quantity, 0)
@@ -223,8 +231,41 @@ const experienceProgressPercent = computed(() =>
     )
   )
 );
-const experienceRemaining = computed(() =>
-  Math.max(0, progression.value.requiredExperience - progression.value.progressInLevel)
+const profileUser = computed(() => visitProfile.value?.user ?? user.value);
+const profileProgression = computed(
+  () => visitProfile.value?.progression ?? progression.value
+);
+const profileCoin = computed(() => visitProfile.value?.coin ?? coin.value);
+const profileTotalSeedCount = computed(() => {
+  const seeds = visitProfile.value?.inventory.seeds ?? inventory.value.seeds;
+
+  return seeds.reduce((total, entry) => total + entry.quantity, 0);
+});
+const profileTotalCropCount = computed(() => {
+  const crops = visitProfile.value?.inventory.crops ?? inventory.value.crops;
+
+  return crops.reduce((total, entry) => total + entry.quantity, 0);
+});
+const profilePlayerLevel = computed(() => profileProgression.value.level);
+const profileExperienceProgressPercent = computed(() =>
+  Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        (profileProgression.value.progressInLevel /
+          profileProgression.value.requiredExperience) *
+          100
+      )
+    )
+  )
+);
+const profileExperienceRemaining = computed(() =>
+  Math.max(
+    0,
+    profileProgression.value.requiredExperience -
+      profileProgression.value.progressInLevel
+  )
 );
 const displayedLands = computed(() => visitProfile.value?.lands ?? lands);
 const visitMode = computed(() => visitProfile.value !== null);
@@ -254,6 +295,13 @@ const warehouseCrops = computed<CropCatalogInventoryItem[]>(() =>
       quantity: getInventoryQuantity("crop", crop.type),
     }))
     .filter((crop) => crop.quantity > 0)
+);
+const allWarehouseCropsSelected = computed(
+  () =>
+    warehouseCrops.value.length > 0 &&
+    warehouseCrops.value.every((crop) =>
+      selectedWarehouseCropTypes.value.includes(crop.type)
+    )
 );
 const selectedGrowthLand = computed(() => {
   if (activePanel.value !== "growth" || selectedLandIndex.value === null) {
@@ -289,7 +337,7 @@ const panelTitle = computed(() => {
     case "warehouse":
       return "农场仓库";
     case "profile":
-      return user.value?.first_name ?? "农场主";
+      return profileUser.value?.first_name ?? "农场主";
     case "social":
       return "好友";
     case "growth":
@@ -357,12 +405,14 @@ function openShopPanel() {
 
 function openWarehousePanel() {
   warehouseTab.value = "seed";
+  selectedWarehouseCropTypes.value = [];
   selectedLandIndex.value = null;
   activePanel.value = "warehouse";
 }
 
 function openCropWarehousePanel() {
   warehouseTab.value = "crop";
+  selectedWarehouseCropTypes.value = [];
   selectedLandIndex.value = null;
   activePanel.value = "warehouse";
 }
@@ -406,6 +456,34 @@ function closeActivePanel() {
 function forceCloseActivePanel() {
   activePanel.value = null;
   selectedLandIndex.value = null;
+}
+
+function toggleWarehouseCropSelection(cropType: CropType) {
+  if (panelBusy.value) {
+    return;
+  }
+
+  if (selectedWarehouseCropTypes.value.includes(cropType)) {
+    selectedWarehouseCropTypes.value = selectedWarehouseCropTypes.value.filter(
+      (type) => type !== cropType
+    );
+    return;
+  }
+
+  selectedWarehouseCropTypes.value = [
+    ...selectedWarehouseCropTypes.value,
+    cropType,
+  ];
+}
+
+function toggleSelectAllWarehouseCrops() {
+  if (panelBusy.value || warehouseCrops.value.length === 0) {
+    return;
+  }
+
+  selectedWarehouseCropTypes.value = allWarehouseCropsSelected.value
+    ? []
+    : warehouseCrops.value.map((crop) => crop.type);
 }
 
 function handleTick() {
@@ -667,8 +745,18 @@ async function harvestAllReadyLands() {
   }
 }
 
-async function sellStoredCrop(cropType: CropType) {
-  if (!user.value) {
+async function sellSelectedWarehouseCrops() {
+  if (!user.value || selectedWarehouseCropTypes.value.length === 0) {
+    return;
+  }
+
+  const selectedTypes = new Set(selectedWarehouseCropTypes.value);
+  const sellTargets = warehouseCrops.value.filter((crop) =>
+    selectedTypes.has(crop.type)
+  );
+
+  if (sellTargets.length === 0) {
+    selectedWarehouseCropTypes.value = [];
     return;
   }
 
@@ -676,11 +764,19 @@ async function sellStoredCrop(cropType: CropType) {
   errorMessage.value = "";
 
   try {
-    const response = await sellCropApi(user.value.id, cropType, 1);
+    for (const crop of sellTargets) {
+      const response = await sellCropApi(
+        user.value.id,
+        crop.type,
+        crop.quantity
+      );
 
-    coin.value = response.coin;
-    replaceProgression(response.progression);
-    replaceInventory(response.inventory);
+      coin.value = response.coin;
+      replaceProgression(response.progression);
+      replaceInventory(response.inventory);
+    }
+
+    selectedWarehouseCropTypes.value = [];
     bumpCoinCounter();
   } catch (error) {
     errorMessage.value =
@@ -760,6 +856,23 @@ onMounted(async () => {
 watch(activePanel, (value) => {
   setPanelScrollLock(value !== null);
 });
+
+watch(warehouseTab, (value) => {
+  if (value !== "crop") {
+    selectedWarehouseCropTypes.value = [];
+  }
+});
+
+watch(
+  warehouseCrops,
+  (crops) => {
+    const availableTypes = new Set(crops.map((crop) => crop.type));
+    selectedWarehouseCropTypes.value = selectedWarehouseCropTypes.value.filter(
+      (type) => availableTypes.has(type)
+    );
+  },
+  { deep: true }
+);
 
 onUnmounted(() => {
   setPanelScrollLock(false);

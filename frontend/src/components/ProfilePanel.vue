@@ -3,7 +3,8 @@
     <div class="profile-panel__hero">
       <span class="profile-panel__avatar">{{ user?.first_name?.slice(0, 1) ?? "F" }}</span>
       <div>
-        <strong>Lv.{{ playerLevel }} 农场主</strong>
+        <strong>{{ user?.first_name ?? "农场主" }}</strong>
+        <p>{{ visitMode ? `拜访中 · Lv.${playerLevel} 农场主` : `Lv.${playerLevel} 农场主` }}</p>
         <p>@{{ user?.username || `user_${user?.id ?? "farm"}` }}</p>
       </div>
     </div>
@@ -51,5 +52,6 @@ defineProps<{
   coin: number;
   totalSeedCount: number;
   totalCropCount: number;
+  visitMode: boolean;
 }>();
 </script>

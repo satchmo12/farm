@@ -18,96 +18,104 @@
     </button>
   </div>
 
-  <div
-    v-if="selectedCrop"
-    class="shop-confirm-backdrop"
-    @click.self="closePurchase"
-  >
-    <section class="shop-confirm-card">
-      <div class="shop-confirm-card__hero">
-        <span class="shop-confirm-card__emoji">{{ selectedCrop.stages[3] }}</span>
-        <div>
-          <strong>{{ selectedCrop.name }}</strong>
-          <p>{{ selectedCrop.description }}</p>
-        </div>
-      </div>
-
-      <div class="shop-confirm-card__stats">
-        <article>
-          <span>拥有种子</span>
-          <strong>{{ selectedCrop.quantity }}</strong>
-        </article>
-        <article>
-          <span>单价</span>
-          <strong>{{ selectedCrop.seedPrice }}</strong>
-        </article>
-        <article>
-          <span>卖价</span>
-          <strong>{{ selectedCrop.fruitPrice }}</strong>
-        </article>
-        <!-- <article>
-          <span>保底产量</span>
-          <strong>{{ selectedCrop.guaranteedYield }}</strong>
-        </article> -->
-        <article>
-          <span>最高产量</span>
-          <strong>{{ selectedCrop.yield }}</strong>
-        </article>
-        <article>
-          <span>经验</span>
-          <strong>{{ selectedCrop.experience }}</strong>
-        </article>
-      </div>
-
-      <div class="shop-confirm-card__quantity">
-        <span>购买数量</span>
-        <div class="shop-quantity-stepper">
-          <button
-            class="shop-quantity-stepper__button"
-            type="button"
-            :disabled="panelBusy || purchaseQuantity <= 1"
-            @click="changeQuantity(-1)"
-          >
-            −
-          </button>
-          <input
-            v-model.number="purchaseQuantity"
-            class="shop-quantity-stepper__input"
-            type="number"
-            min="1"
-            :max="maxPurchaseQuantity"
-          />
-          <button
-            class="shop-quantity-stepper__button"
-            type="button"
-            :disabled="panelBusy || purchaseQuantity >= maxPurchaseQuantity"
-            @click="changeQuantity(1)"
-          >
-            +
-          </button>
-        </div>
-        <p>当前金币 {{ coin }}，最多可买 {{ maxPurchaseQuantity }} 颗</p>
-      </div>
-
-      <div class="shop-confirm-card__actions">
-        <button class="panel-ghost-button" type="button" :disabled="panelBusy" @click="closePurchase">
-          返回列表
-        </button>
+  <Teleport to="body">
+    <div
+      v-if="selectedCrop"
+      class="shop-confirm-backdrop"
+      @click.self="closePurchase"
+    >
+      <section class="shop-confirm-card">
         <button
-          class="seed-buy-button"
+          class="close-button shop-confirm-card__close"
           type="button"
-          :disabled="panelBusy || maxPurchaseQuantity <= 0"
-          @click="confirmPurchase"
+          aria-label="关闭购买确认"
+          :disabled="panelBusy"
+          @click="closePurchase"
         >
-          {{
-            maxPurchaseQuantity > 0
-              ? `确认购买 ${purchaseQuantity} 颗 · ${totalCost} 金币`
-              : "金币不足"
-          }}
+          ×
         </button>
-      </div>
-    </section>
-  </div>
+
+        <div class="shop-confirm-card__hero">
+          <span class="shop-confirm-card__emoji">{{ selectedCrop.stages[3] }}</span>
+          <div>
+            <strong>{{ selectedCrop.name }}</strong>
+            <p>{{ selectedCrop.description }}</p>
+          </div>
+        </div>
+
+        <div class="shop-confirm-card__stats">
+          <article>
+            <span>拥有种子</span>
+            <strong>{{ selectedCrop.quantity }}</strong>
+          </article>
+          <article>
+            <span>单价</span>
+            <strong>{{ selectedCrop.seedPrice }}</strong>
+          </article>
+          <article>
+            <span>卖价</span>
+            <strong>{{ selectedCrop.fruitPrice }}</strong>
+          </article>
+          <article>
+            <span>最高产量</span>
+            <strong>{{ selectedCrop.yield }}</strong>
+          </article>
+          <article>
+            <span>经验</span>
+            <strong>{{ selectedCrop.experience }}</strong>
+          </article>
+        </div>
+
+        <div class="shop-confirm-card__quantity">
+          <span>购买数量</span>
+          <div class="shop-quantity-stepper">
+            <button
+              class="shop-quantity-stepper__button"
+              type="button"
+              :disabled="panelBusy || purchaseQuantity <= 1"
+              @click="changeQuantity(-1)"
+            >
+              −
+            </button>
+            <input
+              v-model.number="purchaseQuantity"
+              class="shop-quantity-stepper__input"
+              type="number"
+              min="1"
+              :max="maxPurchaseQuantity"
+            />
+            <button
+              class="shop-quantity-stepper__button"
+              type="button"
+              :disabled="panelBusy || purchaseQuantity >= maxPurchaseQuantity"
+              @click="changeQuantity(1)"
+            >
+              +
+            </button>
+          </div>
+          <p>当前金币 {{ coin }}，最多可买 {{ maxPurchaseQuantity }} 颗</p>
+        </div>
+
+        <div class="shop-confirm-card__actions">
+          <button class="panel-ghost-button" type="button" :disabled="panelBusy" @click="closePurchase">
+            返回列表
+          </button>
+          <button
+            class="seed-buy-button"
+            type="button"
+            :disabled="panelBusy || maxPurchaseQuantity <= 0"
+            @click="confirmPurchase"
+          >
+            {{
+              maxPurchaseQuantity > 0
+                ? `确认购买 ${purchaseQuantity} 颗 · ${totalCost} 金币`
+                : "金币不足"
+            }}
+          </button>
+        </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

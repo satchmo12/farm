@@ -19,7 +19,6 @@
 
   <div v-else class="panel-empty">
     <strong>仓库里还没有种子</strong>
-    <p>现在种植面板只展示你真正拥有的种子，先去商店买几颗再回来播种。</p>
     <button class="panel-ghost-button" type="button" :disabled="panelBusy" @click="$emit('open-shop')">
       去商店购买
     </button>

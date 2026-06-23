@@ -1122,6 +1122,7 @@ button:disabled {
 }
 
 .warehouse-card {
+  border: 0;
   padding: 12px 10px;
   border-radius: 22px;
   background: linear-gradient(180deg, #fff9ed, #f3e7d2);
@@ -1177,6 +1178,38 @@ button:disabled {
   min-height: 0;
 }
 
+.warehouse-card--selectable {
+  position: relative;
+  width: 100%;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, outline-color 0.18s ease;
+}
+
+.warehouse-card--selectable:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 22px rgba(80, 49, 16, 0.14);
+}
+
+.warehouse-card--selectable:disabled {
+  opacity: 0.6;
+}
+
+.warehouse-card--selected {
+  outline: 2px solid rgba(92, 143, 73, 0.95);
+  box-shadow: 0 16px 24px rgba(63, 110, 52, 0.2);
+}
+
+.warehouse-card__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #fff9ef;
+  background: linear-gradient(180deg, #5c8f49, #3f6e34);
+}
+
 .warehouse-card__meta--compact {
   min-height: 32px;
 }
@@ -1190,9 +1223,9 @@ button:disabled {
 }
 
 .shop-confirm-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 4;
+  z-index: 44;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -1201,13 +1234,23 @@ button:disabled {
 }
 
 .shop-confirm-card {
+  position: relative;
   width: min(460px, 100%);
+  max-height: min(calc(100vh - 36px), calc(100svh - 36px));
+  overflow: auto;
   padding: 20px;
   border-radius: 26px;
   background: linear-gradient(180deg, #fff8ea, #f1e2c1);
   box-shadow: 0 22px 40px rgba(67, 41, 14, 0.2);
   display: grid;
   gap: 16px;
+}
+
+.shop-confirm-card__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
 }
 
 .shop-confirm-card__hero {
@@ -1302,6 +1345,36 @@ button:disabled {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.warehouse-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 249, 237, 0.98), rgba(243, 231, 210, 0.98));
+  box-shadow: 0 -8px 20px rgba(84, 58, 24, 0.08);
+}
+
+.warehouse-footer__summary {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.warehouse-footer__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.warehouse-footer__button {
+  width: 100%;
+  justify-self: stretch;
 }
 
 .social-panel {

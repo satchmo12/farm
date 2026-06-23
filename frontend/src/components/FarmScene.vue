@@ -1,20 +1,11 @@
 <template>
   <section class="scene-stage">
     <div class="scene-hint">
-      <template v-if="visitMode">
-        <strong>{{ visitFarmName }} 的农场</strong>
-        <span>当前是拜访模式，只能查看，不能操作。</span>
-        <button
-          class="panel-ghost-button scene-hint__button"
-          type="button"
-          @click="$emit('return-home')"
-        >
-          返回我的农场
-        </button>
-      </template>
-
+      <!-- <strong>{{ readyLandCount }} 块可收获</strong>
+      <span>{{ growingLandCount }} 块正在成长</span> -->
+     
       <button
-        v-else-if="readyLandCount > 0"
+        v-if="readyLandCount > 0"
         class="harvest-all-button"
         type="button"
         :disabled="panelBusy"
@@ -57,7 +48,7 @@
               <span class="plot-id">#{{ String(index + 1).padStart(2, "0") }}</span>
               <div class="crop-visual">
                 <span class="crop-icon">{{ getLandIcon(land) }}</span>
-                <span v-if="land.status === 'ready'" class="crop-badge">可收获</span>
+                <!-- <span v-if="land.status === 'ready'" class="crop-badge">可收获</span> -->
               </div>
 
               <span v-for="burst in getBurstsForLand(index)" :key="burst.id" class="coin-burst">
@@ -83,8 +74,6 @@ const props = defineProps<{
   growingLandCount: number;
   errorMessage: string;
   panelBusy: boolean;
-  visitMode: boolean;
-  visitFarmName: string;
   getCropClassName: (land: Land) => string;
   getLandIcon: (land: Land) => string;
   getBurstsForLand: (index: number) => FloatingBurst[];
@@ -93,7 +82,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: "land-click", index: number): void;
   (event: "harvest-all"): void;
-  (event: "return-home"): void;
 }>();
 
 const sceneViewportRef = ref<HTMLElement | null>(null);
