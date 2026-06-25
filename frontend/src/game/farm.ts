@@ -9,19 +9,82 @@ import { cropCatalog } from "./crops";
 
 export const LAND_COUNT = 24;
 
-export function createEmptyLand(): Land {
+
+export const FARM_COLS = 6;
+export const FARM_ROWS = 4;
+
+
+export const TILE_WIDTH = 100;
+export const TILE_HEIGHT = 56;
+
+
+export interface GridPosition {
+  row: number;
+  col: number;
+}
+
+export interface WorldPosition {
+  x: number;
+  y: number;
+}
+
+export function getLandPosition(index: number) {
+
+  const row = Math.floor(index / FARM_COLS);
+  const col = index % FARM_COLS;
+
   return {
+    x: (col - row) * (TILE_WIDTH / 2),
+    y: (col + row) * (TILE_HEIGHT / 2)
+  };
+}
+
+export function createEmptyLand(id: number): Land {
+
+  const pos = getLandPosition(id)
+  return {
+    id: id,
     status: "empty",
     remain: 0,
     cropType: null,
     stage: 0,
     plantedAt: null,
     growthDurationSeconds: 0,
+    x: pos.x,
+    y: pos.y
+  };
+}
+
+export function getLandPositionByGrid(row: number, col: number): WorldPosition {
+  return {
+    x: (col - row) * (TILE_WIDTH / 2),
+    y: (col + row) * (TILE_HEIGHT / 2),
   };
 }
 
 export function createEmptyFarm(): Land[] {
-  return Array.from({ length: LAND_COUNT }, () => createEmptyLand());
+  const lands: Land[] = [];
+  let id = 0;
+  for (let row = 0; row < FARM_ROWS; row++) {
+    for (let col = 0; col < FARM_COLS; col++) {
+      const pos = getLandPositionByGrid(row, col);
+
+      lands.push({
+        id: id++,
+        status: "empty",
+        remain: 0,
+        cropType: null,
+        stage: 0,
+        plantedAt: null,
+        growthDurationSeconds: 0,
+        // ✅ world position（直接缓存，减少计算）
+        x: pos.x,
+        y: pos.y,
+      });
+    }
+  }
+
+  return lands;
 }
 
 export function createEmptyInventory(): Inventory {
@@ -93,13 +156,13 @@ export function normalizeLand(land?: Partial<Land> | null): Land {
       : 0;
 
   if (!cropType || !plantedAt || growthDurationSeconds <= 0) {
-    return createEmptyLand();
+    return createEmptyLand(land?.id || 0);
   }
 
   const plantedAtMs = Date.parse(plantedAt);
 
   if (Number.isNaN(plantedAtMs)) {
-    return createEmptyLand();
+    return createEmptyLand(land?.id || 0);
   }
 
   const elapsedSeconds = Math.max(
@@ -109,14 +172,18 @@ export function normalizeLand(land?: Partial<Land> | null): Land {
   const remain = Math.max(0, growthDurationSeconds - elapsedSeconds);
   const status = remain === 0 ? "ready" : "growing";
   const stage = getGrowthStage(elapsedSeconds, growthDurationSeconds, status);
-
+  const id = land?.id || 0;
+  const pos = getLandPosition(id);
   return {
+    id: land?.id || 0,
     status,
     remain,
     cropType,
     stage,
     plantedAt,
     growthDurationSeconds,
+    x: pos.x,
+    y: pos.y
   };
 }
 
@@ -140,3 +207,5 @@ export function getGrowthPercent(land: Land) {
 
   return Math.max(0, Math.min(100, Math.round(progress)));
 }
+
+

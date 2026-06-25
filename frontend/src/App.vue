@@ -158,6 +158,7 @@ import {
   normalizeInventory,
   normalizeLand,
 } from "./game/farm";
+
 import {
   cropCatalog,
   getCropClassName,
@@ -350,6 +351,7 @@ const panelTitle = computed(() => {
 });
 const isCompactPanel = computed(
   () =>
+    activePanel.value === "plant" ||
     activePanel.value === "growth" ||
     activePanel.value === "profile" ||
     activePanel.value === "shop" ||

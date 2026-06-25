@@ -22,13 +22,38 @@ export type WarehouseTab = "seed" | "crop";
 export type SocialTab = "leaderboard" | "friends";
 
 export interface Land {
+
+  id: number;
+  // 坐标
+  x: number;
+  y: number;
+
+  // ✅ 新增：网格坐标
+  // row: number;
+  // col: number;
+
   status: LandStatus;
   remain: number;
   cropType: CropType | null;
   stage: 0 | 1 | 2 | 3 | 4;
   plantedAt: string | null;
   growthDurationSeconds: number;
+  growthDuration?: number;
+  // 动画
+  progress?: number; // 0~1
+
+
 }
+
+export interface RenderLand {
+  id: number;
+  // 坐标
+  x: number;
+  y: number;
+  row: number;
+  col: number;
+}
+
 
 export interface InventoryEntry {
   cropType: CropType;
@@ -40,7 +65,7 @@ export interface Inventory {
   crops: InventoryEntry[];
 }
 
-export interface CropCatalogItem extends CropDefinition {}
+export interface CropCatalogItem extends CropDefinition { }
 
 export interface CropCatalogInventoryItem extends CropCatalogItem {
   quantity: number;
